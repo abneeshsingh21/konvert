@@ -7,7 +7,7 @@
   "type": "module",
   "publisher": "epl-lang",
   "author": "epl-lang",
-  "main": "./dist/extension.js",
+  "main": "./dist/extension.cjs",
   "types": "./dist/compiler/index.d.ts",
   "bin": {
     "konvert": "./dist/cli.js"
@@ -20,7 +20,10 @@
     "vscode": "^1.90.0"
   },
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onCommand:konvert.openLivePreview",
+    "onCommand:konvert.convertEnglishToCode",
+    "onCommand:konvert.downloadModel"
   ],
   "contributes": {
     "commands": [
@@ -54,7 +57,7 @@
     ]
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && esbuild src/extension.ts --bundle --outfile=dist/extension.cjs --external:vscode --format=cjs --platform=node",
     "test": "vitest run",
     "test:watch": "vitest",
     "benchmark": "vitest bench",
@@ -73,6 +76,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
+    "esbuild": "^0.21.5",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
   },
