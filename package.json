@@ -1,10 +1,14 @@
 {
-  "name": "intentengine",
+  "name": "konvert",
+  "displayName": "Konvert — English to Code Compiler",
   "version": "0.1.0",
-  "description": "Deterministic English-to-Code compiler — Write English, Ship Code, No Cloud, No Hallucinations.",
+  "description": "Deterministic English-to-Code compiler — Write English, Ship Code. 0% Hallucinations, <2ms Latency, 100% Offline.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "konvert": "./dist/cli.js"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -14,19 +18,24 @@
   "contributes": {
     "commands": [
       {
-        "command": "intentengine.openLivePreview",
-        "title": "IntentEngine: Open Live Real-Time Compiler Preview",
+        "command": "konvert.openLivePreview",
+        "title": "Konvert: Open Live Compiler Preview",
         "icon": "$(zap)"
       },
       {
-        "command": "intentengine.convertEnglishToCode",
-        "title": "IntentEngine: Convert English to Code (Prompt)",
+        "command": "konvert.convertEnglishToCode",
+        "title": "Konvert: Convert English to Code (Prompt)",
         "icon": "$(edit)"
       }
     ],
     "keybindings": [
       {
-        "command": "intentengine.openLivePreview",
+        "command": "konvert.openLivePreview",
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k"
+      },
+      {
+        "command": "konvert.openLivePreview",
         "key": "ctrl+alt+e",
         "mac": "cmd+alt+e"
       }
@@ -40,11 +49,13 @@
     "lint": "eslint src/"
   },
   "keywords": [
+    "konvert",
     "compiler",
     "english-to-code",
     "cnl",
     "code-generation",
-    "deterministic"
+    "deterministic",
+    "offline"
   ],
   "license": "MIT",
   "devDependencies": {

@@ -71,6 +71,6 @@ if (command === 'validate') {
     }
   }
 } else {
-  console.log('Usage: node dist/cli.js [validate|compile] [--lang python|java|cpp|all] "<code>"');
+  console.log('Usage: konvert [validate|compile] [--lang python|java|cpp|all] "<code>"');
   process.exit(0);
 }

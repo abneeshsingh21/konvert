@@ -8,13 +8,13 @@ let contextBuilder = new ContextBuilder();
 let statusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Axiom Code (IntentEngine) Extension is now active!');
+  console.log('Konvert Extension is now active!');
 
   // 1. Status Bar Item
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBarItem.text = '$(zap) Axiom: Ready';
-  statusBarItem.tooltip = 'Axiom Code: Deterministic English-to-Code (<2ms, 0% Hallucination, Offline)';
-  statusBarItem.command = 'intentengine.openLivePreview';
+  statusBarItem.text = '$(zap) Konvert: Ready';
+  statusBarItem.tooltip = 'Konvert: Deterministic English-to-Code (<2ms, 0% Hallucination, Offline)';
+  statusBarItem.command = 'konvert.openLivePreview';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
@@ -30,68 +30,65 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   // 2. Command: Convert English to Code via Input Box
-  const convertCommand = vscode.commands.registerCommand(
-    'intentengine.convertEnglishToCode',
-    async () => {
-      const editor = vscode.window.activeTextEditor;
-      const targetLang = editor ? editor.document.languageId : 'python';
+  const runConvert = async () => {
+    const editor = vscode.window.activeTextEditor;
+    const targetLang = editor ? editor.document.languageId : 'python';
 
-      const input = await vscode.window.showInputBox({
-        prompt: `Enter intent in English (Target: ${targetLang})`,
-        placeHolder: 'e.g. "declare total as integer with value 100" or "DEFINE FUNCTION add..."',
-      });
+    const input = await vscode.window.showInputBox({
+      prompt: `Enter intent in English (Target: ${targetLang})`,
+      placeHolder: 'e.g. "declare total as integer with value 100" or "DEFINE FUNCTION add..."',
+    });
 
-      if (!input) return;
+    if (!input) return;
 
-      // Try deterministic compiler first
-      let result = compileForLang(input, targetLang);
-      
-      // If direct parsing had errors and model is available, normalize via local model
-      if (result.errors.length > 0) {
-        statusBarItem.text = '$(sync~spin) Normalizing Intent...';
-        try {
-          const normalizedCNL = await normalizeEnglishWithModel(input, context.extensionPath);
-          result = compileForLang(normalizedCNL, targetLang);
-        } catch {
-          // Keep original error if normalization wasn't possible
-        }
-        statusBarItem.text = '$(zap) Axiom: Ready';
+    // Try deterministic compiler first
+    let result = compileForLang(input, targetLang);
+    
+    // If direct parsing had errors and model is available, normalize via local model
+    if (result.errors.length > 0) {
+      statusBarItem.text = '$(sync~spin) Normalizing Intent...';
+      try {
+        const normalizedCNL = await normalizeEnglishWithModel(input, context.extensionPath);
+        result = compileForLang(normalizedCNL, targetLang);
+      } catch {
+        // Keep original error if normalization wasn't possible
       }
-
-      if (result.errors.length > 0) {
-        vscode.window.showErrorMessage(
-          `Axiom Syntax Error: ${result.errors.map((e) => e.message).join('; ')}`
-        );
-        return;
-      }
-
-      if (editor) {
-        editor.edit((editBuilder) => {
-          editBuilder.insert(editor.selection.active, result.code + '\n');
-        });
-        contextBuilder.addStatement(input);
-        vscode.window.showInformationMessage(`Code compiled and inserted as ${targetLang} in <2ms!`);
-      } else {
-        vscode.window.showInformationMessage(result.code);
-      }
+      statusBarItem.text = '$(zap) Konvert: Ready';
     }
-  );
-  context.subscriptions.push(convertCommand);
+
+    if (result.errors.length > 0) {
+      vscode.window.showErrorMessage(
+        `Konvert Syntax Error: ${result.errors.map((e) => e.message).join('; ')}`
+      );
+      return;
+    }
+
+    if (editor) {
+      editor.edit((editBuilder) => {
+        editBuilder.insert(editor.selection.active, result.code + '\n');
+      });
+      contextBuilder.addStatement(input);
+      vscode.window.showInformationMessage(`Code compiled and inserted as ${targetLang} in <2ms!`);
+    } else {
+      vscode.window.showInformationMessage(result.code);
+    }
+  };
+
+  context.subscriptions.push(vscode.commands.registerCommand('konvert.convertEnglishToCode', runConvert));
+  context.subscriptions.push(vscode.commands.registerCommand('intentengine.convertEnglishToCode', runConvert));
 
   // 3. Command: Open Split-Pane Live Preview Webview
-  const previewCommand = vscode.commands.registerCommand(
-    'intentengine.openLivePreview',
-    () => {
-      const panel = vscode.window.createWebviewPanel(
-        'intentEngineLivePreview',
-        'Axiom Code — Live Compiler',
-        vscode.ViewColumn.Beside,
-        { enableScripts: true }
-      );
+  const runLivePreview = () => {
+    const panel = vscode.window.createWebviewPanel(
+      'konvertLivePreview',
+      'Konvert — Live Compiler',
+      vscode.ViewColumn.Beside,
+      { enableScripts: true }
+    );
 
-      panel.webview.html = getWebviewContent();
+    panel.webview.html = getWebviewContent();
 
-      panel.webview.onDidReceiveMessage(async (message) => {
+    panel.webview.onDidReceiveMessage(async (message) => {
         if (message.command === 'compile') {
           const lang = message.lang || 'python';
           const startTime = performance.now();
@@ -155,9 +152,10 @@ export function activate(context: vscode.ExtensionContext) {
           }
         }
       });
-    }
-  );
-  context.subscriptions.push(previewCommand);
+    };
+
+    context.subscriptions.push(vscode.commands.registerCommand('konvert.openLivePreview', runLivePreview));
+    context.subscriptions.push(vscode.commands.registerCommand('intentengine.openLivePreview', runLivePreview));
 
   // 4. Inline Ghost-Text Provider (Triggers on comments like #? or //?)
   const inlineProvider: vscode.InlineCompletionItemProvider = {
@@ -231,7 +229,7 @@ function getWebviewContent(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Axiom Code — Live Compiler</title>
+  <title>Konvert — Live Compiler</title>
   <style>
     :root {
       --bg: var(--vscode-editor-background, #1e1e1e);
@@ -635,9 +633,9 @@ function getWebviewContent(): string {
   <!-- Top Brand Bar -->
   <div class="top-bar">
     <div class="brand">
-      <div class="brand-icon">A</div>
+      <div class="brand-icon">K</div>
       <div>
-        <span class="brand-title">Axiom Code</span>
+        <span class="brand-title">Konvert</span>
         <span class="brand-tag">Deterministic English-to-Code</span>
       </div>
     </div>
