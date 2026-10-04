@@ -5,7 +5,8 @@
   "description": "Deterministic English-to-Code compiler — Write English, Ship Code. 0% Hallucinations, <2ms Latency, 100% Offline.",
   "icon": "icon.png",
   "type": "module",
-  "publisher": "konvert",
+  "publisher": "epl-lang",
+  "author": "epl-lang",
   "main": "./dist/extension.js",
   "types": "./dist/compiler/index.d.ts",
   "bin": {

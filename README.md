@@ -328,4 +328,4 @@ npx @vscode/vsce package --no-dependencies --allow-missing-repository
 ## 📄 License
 
 Konvert is licensed under the [MIT License](LICENSE).
-Copyright © 2026 Abneesh Singh & Contributors.
+Copyright © 2026 epl-lang & Contributors.
