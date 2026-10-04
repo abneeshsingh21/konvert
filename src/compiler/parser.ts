@@ -1213,9 +1213,20 @@ export function parseCNL(input: string): ast.ParseResult {
     }
 
     const visitor = new CNLToASTVisitor();
-    let program: ast.ProgramNode = { type: 'Program', line: 1, col: 1, body: [] };
+    let program: ast.ProgramNode = { type: 'Program', line: 1, col: 1, body: [], isIncomplete: errors.length > 0 };
     if (cst) {
-        program = visitor.visit(cst);
+        try {
+            program = visitor.visit(cst);
+        } catch (e: any) {
+            if (errors.length === 0) {
+                errors.push({
+                    message: e?.message || 'Incomplete syntax statement',
+                    line: 1,
+                    col: 1,
+                    severity: 'error'
+                });
+            }
+        }
     }
     
     return {
