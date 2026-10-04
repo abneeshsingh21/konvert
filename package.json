@@ -1,0 +1,59 @@
+{
+  "name": "intentengine",
+  "version": "0.1.0",
+  "description": "Deterministic English-to-Code compiler — Write English, Ship Code, No Cloud, No Hallucinations.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "intentengine.openLivePreview",
+        "title": "IntentEngine: Open Live Real-Time Compiler Preview",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "intentengine.convertEnglishToCode",
+        "title": "IntentEngine: Convert English to Code (Prompt)",
+        "icon": "$(edit)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "intentengine.openLivePreview",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "benchmark": "vitest bench",
+    "lint": "eslint src/"
+  },
+  "keywords": [
+    "compiler",
+    "english-to-code",
+    "cnl",
+    "code-generation",
+    "deterministic"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.140.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "chevrotain": "^11.2.0"
+  }
+}

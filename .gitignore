@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Large Model Weights (>100MB GitHub limit)
+*.safetensors
+*.pt
+*.bin
+
+# Logs & temp Kaggle outputs
+*.log
+*.zip
+kaggle_log/
+kernel-output*/
+v3-log/
+v5-models/
+models_v6/
+
+# Training checkpoints & optimizer weights
+models/training_output/
+models/**/checkpoint-*/

@@ -1,0 +1,176 @@
+{"english":"set limit to TRUE","cnl":"SET limit TO TRUE","category":"assignments"}
+{"english":"create a int variable total set to 42","cnl":"DECLARE total AS Int WITH VALUE 42","category":"variables_with_value"}
+{"english":"change size to 3.14","cnl":"SET size TO 3.14","category":"assignments"}
+{"english":"push \"active\" into users","cnl":"APPEND \"active\" TO users","category":"append"}
+{"english":"initialize total0 of type boolean with TRUE","cnl":"DECLARE total0 AS Bool WITH VALUE TRUE","category":"variables_with_value"}
+{"english":"write an if statement checking if maxAge0 >= 10 then print \"Accepted\" else print \"Rejected\"","cnl":"IF maxAge0 >= 10:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"add 3.14 to the list records","cnl":"APPEND 3.14 TO records","category":"append"}
+{"english":"run a try catch block calling mergeResults0(), catching String error as err and printing it","cnl":"TRY:\n  CALL mergeResults0()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"insert 3.14 at the end of tokens","cnl":"APPEND 3.14 TO tokens","category":"append"}
+{"english":"update status0 to equal \"active\"","cnl":"SET status0 TO \"active\"","category":"assignments"}
+{"english":"assign 10 to count0","cnl":"SET count0 TO 10","category":"assignments"}
+{"english":"initialize size0 as string","cnl":"DECLARE size0 AS String","category":"variables"}
+{"english":"declare a variable named size0 as boolean","cnl":"DECLARE size0 AS Bool","category":"variables"}
+{"english":"assign TRUE to count","cnl":"SET count TO TRUE","category":"assignments"}
+{"english":"create a integer variable maxAge set to 10","cnl":"DECLARE maxAge AS Int WITH VALUE 10","category":"variables_with_value"}
+{"english":"put TRUE into limit0","cnl":"SET limit0 TO TRUE","category":"assignments"}
+{"english":"change limit to 42","cnl":"SET limit TO 42","category":"assignments"}
+{"english":"run a try catch block calling calculateSum(), catching String error as err and printing it","cnl":"TRY:\n  CALL calculateSum()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"declare a variable named size as float","cnl":"DECLARE size AS Float","category":"variables"}
+{"english":"initialize score as boolean","cnl":"DECLARE score AS Bool","category":"variables"}
+{"english":"make a string named size0 holding \"active\"","cnl":"DECLARE size0 AS String WITH VALUE \"active\"","category":"variables_with_value"}
+{"english":"declare total as float with value 3.14","cnl":"DECLARE total AS Float WITH VALUE 3.14","category":"variables_with_value"}
+{"english":"put 42 into count","cnl":"SET count TO 42","category":"assignments"}
+{"english":"check if count >= 3.14: output \"Accepted\", otherwise output \"Rejected\"","cnl":"IF count >= 3.14:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"try calling validateInput0() catch err as String then print err","cnl":"TRY:\n  CALL validateInput0()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"push 42 into scores","cnl":"APPEND 42 TO scores","category":"append"}
+{"english":"branch: if score0 >= \"active\" print \"Accepted\" else print \"Rejected\"","cnl":"IF score0 >= \"active\":\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"make a float named limit0 holding 3.14","cnl":"DECLARE limit0 AS Float WITH VALUE 3.14","category":"variables_with_value"}
+{"english":"set status to 42","cnl":"SET status TO 42","category":"assignments"}
+{"english":"declare limit as boolean with value TRUE","cnl":"DECLARE limit AS Bool WITH VALUE TRUE","category":"variables_with_value"}
+{"english":"make a new boolean variable offset","cnl":"DECLARE offset AS Bool","category":"variables"}
+{"english":"make a new string variable limit","cnl":"DECLARE limit AS String","category":"variables"}
+{"english":"if status0 is greater than or equal to TRUE: print \"Accepted\" else: print \"Rejected\"","cnl":"IF status0 >= TRUE:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"branch: if count >= TRUE print \"Accepted\" else print \"Rejected\"","cnl":"IF count >= TRUE:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"define limit as a boolean","cnl":"DECLARE limit AS Bool","category":"variables"}
+{"english":"add 3.14 to the list users","cnl":"APPEND 3.14 TO users","category":"append"}
+{"english":"try calling processData2() catch err as String then print err","cnl":"TRY:\n  CALL processData2()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"set total to 10","cnl":"SET total TO 10","category":"assignments"}
+{"english":"try: call mergeResults1() catch err as String: print err","cnl":"TRY:\n  CALL mergeResults1()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"set index0 to TRUE","cnl":"SET index0 TO TRUE","category":"assignments"}
+{"english":"set total0 to 3.14","cnl":"SET total0 TO 3.14","category":"assignments"}
+{"english":"create a variable called score0 of type int","cnl":"DECLARE score0 AS Int","category":"variables"}
+{"english":"write a function called validateInput2 with parameters a of type int and b of type int which returns int: return a + b","cnl":"DEFINE FUNCTION validateInput2(a: Int, b: Int) -> Int:\n  RETURN a + b\nEND FUNCTION","category":"functions"}
+{"english":"set count to \"active\"","cnl":"SET count TO \"active\"","category":"assignments"}
+{"english":"assign 42 to offset","cnl":"SET offset TO 42","category":"assignments"}
+{"english":"change total to \"active\"","cnl":"SET total TO \"active\"","category":"assignments"}
+{"english":"branch: if maxAge >= \"active\" print \"Accepted\" else print \"Rejected\"","cnl":"IF maxAge >= \"active\":\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"define limit as a float","cnl":"DECLARE limit AS Float","category":"variables"}
+{"english":"append TRUE to items","cnl":"APPEND TRUE TO items","category":"append"}
+{"english":"initialize maxAge of type float with 3.14","cnl":"DECLARE maxAge AS Float WITH VALUE 3.14","category":"variables_with_value"}
+{"english":"run a try catch block calling processData(), catching String error as err and printing it","cnl":"TRY:\n  CALL processData()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"write an if statement checking if total >= TRUE then print \"Accepted\" else print \"Rejected\"","cnl":"IF total >= TRUE:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"check if total >= TRUE: output \"Accepted\", otherwise output \"Rejected\"","cnl":"IF total >= TRUE:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"create a variable called limit of type string","cnl":"DECLARE limit AS String","category":"variables"}
+{"english":"set a new variable maxAge as boolean equal to TRUE","cnl":"DECLARE maxAge AS Bool WITH VALUE TRUE","category":"variables_with_value"}
+{"english":"update status to equal 42","cnl":"SET status TO 42","category":"assignments"}
+{"english":"put 42 into maxAge0","cnl":"SET maxAge0 TO 42","category":"assignments"}
+{"english":"check if size >= 42: output \"Accepted\", otherwise output \"Rejected\"","cnl":"IF size >= 42:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"make a int named offset0 holding 42","cnl":"DECLARE offset0 AS Int WITH VALUE 42","category":"variables_with_value"}
+{"english":"write an if statement checking if index >= 42 then print \"Accepted\" else print \"Rejected\"","cnl":"IF index >= 42:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"make a string named total holding \"active\"","cnl":"DECLARE total AS String WITH VALUE \"active\"","category":"variables_with_value"}
+{"english":"write an if statement checking if status >= 42 then print \"Accepted\" else print \"Rejected\"","cnl":"IF status >= 42:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"make a new int variable maxAge","cnl":"DECLARE maxAge AS Int","category":"variables"}
+{"english":"filter items in students where age >= 18","cnl":"FILTER students WHERE age >= 18","category":"filter"}
+{"english":"initialize total as boolean","cnl":"DECLARE total AS Bool","category":"variables"}
+{"english":"declare a variable named count as float","cnl":"DECLARE count AS Float","category":"variables"}
+{"english":"write an if statement checking if offset >= 3.14 then print \"Accepted\" else print \"Rejected\"","cnl":"IF offset >= 3.14:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"write an if statement checking if size >= 3.14 then print \"Accepted\" else print \"Rejected\"","cnl":"IF size >= 3.14:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"wrap call to validateInput1() in try catch: on error err of type String print err","cnl":"TRY:\n  CALL validateInput1()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"write an if statement checking if size >= 10 then print \"Accepted\" else print \"Rejected\"","cnl":"IF size >= 10:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"put \"active\" into offset","cnl":"SET offset TO \"active\"","category":"assignments"}
+{"english":"define a function named computeTax1 taking a as int and b as int returning int: return a plus b","cnl":"DEFINE FUNCTION computeTax1(a: Int, b: Int) -> Int:\n  RETURN a + b\nEND FUNCTION","category":"functions"}
+{"english":"define offset as a integer","cnl":"DECLARE offset AS Int","category":"variables"}
+{"english":"initialize score of type boolean with TRUE","cnl":"DECLARE score AS Bool WITH VALUE TRUE","category":"variables_with_value"}
+{"english":"insert \"active\" at the end of tokens","cnl":"APPEND \"active\" TO tokens","category":"append"}
+{"english":"set total0 to \"active\"","cnl":"SET total0 TO \"active\"","category":"assignments"}
+{"english":"update size to equal 10","cnl":"SET size TO 10","category":"assignments"}
+{"english":"check if index >= \"active\": output \"Accepted\", otherwise output \"Rejected\"","cnl":"IF index >= \"active\":\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"define maxAge as a boolean","cnl":"DECLARE maxAge AS Bool","category":"variables"}
+{"english":"try: call calculateSum() catch err as String: print err","cnl":"TRY:\n  CALL calculateSum()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"create a float variable score set to 3.14","cnl":"DECLARE score AS Float WITH VALUE 3.14","category":"variables_with_value"}
+{"english":"set a new variable count0 as string equal to \"active\"","cnl":"DECLARE count0 AS String WITH VALUE \"active\"","category":"variables_with_value"}
+{"english":"loop from 0 to 3.14 with index i: print i","cnl":"FOR i FROM 0 TO 3.14 STEP 1:\n  PRINT i\nEND FOR","category":"loops_for"}
+{"english":"create a variable called offset0 of type int","cnl":"DECLARE offset0 AS Int","category":"variables"}
+{"english":"if total0 is greater than or equal to \"active\": print \"Accepted\" else: print \"Rejected\"","cnl":"IF total0 >= \"active\":\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"push \"active\" into items","cnl":"APPEND \"active\" TO items","category":"append"}
+{"english":"put 10 into status","cnl":"SET status TO 10","category":"assignments"}
+{"english":"create a variable called score of type float","cnl":"DECLARE score AS Float","category":"variables"}
+{"english":"run a try catch block calling processData0(), catching String error as err and printing it","cnl":"TRY:\n  CALL processData0()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"put TRUE into list items","cnl":"APPEND TRUE TO items","category":"append"}
+{"english":"branch: if index >= 42 print \"Accepted\" else print \"Rejected\"","cnl":"IF index >= 42:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"define limit0 as a int","cnl":"DECLARE limit0 AS Int","category":"variables"}
+{"english":"if condition maxAge >= 42: print \"Accepted\" else print \"Rejected\"","cnl":"IF maxAge >= 42:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"make a new integer variable total","cnl":"DECLARE total AS Int","category":"variables"}
+{"english":"create a string variable index set to \"active\"","cnl":"DECLARE index AS String WITH VALUE \"active\"","category":"variables_with_value"}
+{"english":"attempt to call computeTax() catching any String err and printing it","cnl":"TRY:\n  CALL computeTax()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"declare a variable named offset as float","cnl":"DECLARE offset AS Float","category":"variables"}
+{"english":"if condition index >= 10: print \"Accepted\" else print \"Rejected\"","cnl":"IF index >= 10:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"put TRUE into list tokens","cnl":"APPEND TRUE TO tokens","category":"append"}
+{"english":"put 42 into score","cnl":"SET score TO 42","category":"assignments"}
+{"english":"get all elements in records with age >= 18","cnl":"FILTER records WHERE age >= 18","category":"filter"}
+{"english":"set index0 to \"active\"","cnl":"SET index0 TO \"active\"","category":"assignments"}
+{"english":"check if index >= 3.14: output \"Accepted\", otherwise output \"Rejected\"","cnl":"IF index >= 3.14:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"branch: if status0 >= 10 print \"Accepted\" else print \"Rejected\"","cnl":"IF status0 >= 10:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"assign 3.14 to total","cnl":"SET total TO 3.14","category":"assignments"}
+{"english":"define status as a float","cnl":"DECLARE status AS Float","category":"variables"}
+{"english":"sort collection scores by age in reverse order","cnl":"SORT scores BY age DESC","category":"sort"}
+{"english":"update maxAge to equal 3.14","cnl":"SET maxAge TO 3.14","category":"assignments"}
+{"english":"add 10 to the list scores","cnl":"APPEND 10 TO scores","category":"append"}
+{"english":"try calling calculateSum0() catch err as String then print err","cnl":"TRY:\n  CALL calculateSum0()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"declare a variable named index as float","cnl":"DECLARE index AS Float","category":"variables"}
+{"english":"check if total0 >= 42: output \"Accepted\", otherwise output \"Rejected\"","cnl":"IF total0 >= 42:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"if condition offset >= 10: print \"Accepted\" else print \"Rejected\"","cnl":"IF offset >= 10:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"change index to 10","cnl":"SET index TO 10","category":"assignments"}
+{"english":"update score to equal \"active\"","cnl":"SET score TO \"active\"","category":"assignments"}
+{"english":"try calling processData0() catch err as String then print err","cnl":"TRY:\n  CALL processData0()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"wrap call to processData2() in try catch: on error err of type String print err","cnl":"TRY:\n  CALL processData2()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"if score0 is greater than or equal to 3.14: print \"Accepted\" else: print \"Rejected\"","cnl":"IF score0 >= 3.14:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"make a new float variable count","cnl":"DECLARE count AS Float","category":"variables"}
+{"english":"create a variable called offset of type boolean","cnl":"DECLARE offset AS Bool","category":"variables"}
+{"english":"check if size0 >= 42: output \"Accepted\", otherwise output \"Rejected\"","cnl":"IF size0 >= 42:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"initialize score of type float with 3.14","cnl":"DECLARE score AS Float WITH VALUE 3.14","category":"variables_with_value"}
+{"english":"change status to 10","cnl":"SET status TO 10","category":"assignments"}
+{"english":"make a new int variable maxAge0","cnl":"DECLARE maxAge0 AS Int","category":"variables"}
+{"english":"create a integer variable index set to 10","cnl":"DECLARE index AS Int WITH VALUE 10","category":"variables_with_value"}
+{"english":"if condition index0 >= TRUE: print \"Accepted\" else print \"Rejected\"","cnl":"IF index0 >= TRUE:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"put TRUE into count","cnl":"SET count TO TRUE","category":"assignments"}
+{"english":"make a new float variable total0","cnl":"DECLARE total0 AS Float","category":"variables"}
+{"english":"insert 42 at the end of scores","cnl":"APPEND 42 TO scores","category":"append"}
+{"english":"define offset as a float","cnl":"DECLARE offset AS Float","category":"variables"}
+{"english":"filter records where age is greater than or equal to 18","cnl":"FILTER records WHERE age >= 18","category":"filter"}
+{"english":"make a new boolean variable status","cnl":"DECLARE status AS Bool","category":"variables"}
+{"english":"set a new variable maxAge as integer equal to 10","cnl":"DECLARE maxAge AS Int WITH VALUE 10","category":"variables_with_value"}
+{"english":"write an if statement checking if limit0 >= 3.14 then print \"Accepted\" else print \"Rejected\"","cnl":"IF limit0 >= 3.14:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"set a new variable status as string equal to \"active\"","cnl":"DECLARE status AS String WITH VALUE \"active\"","category":"variables_with_value"}
+{"english":"create a string variable count set to \"active\"","cnl":"DECLARE count AS String WITH VALUE \"active\"","category":"variables_with_value"}
+{"english":"declare maxAge0 as float with value 3.14","cnl":"DECLARE maxAge0 AS Float WITH VALUE 3.14","category":"variables_with_value"}
+{"english":"declare a variable named limit as boolean","cnl":"DECLARE limit AS Bool","category":"variables"}
+{"english":"wrap call to processData() in try catch: on error err of type String print err","cnl":"TRY:\n  CALL processData()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"check if total >= 42: output \"Accepted\", otherwise output \"Rejected\"","cnl":"IF total >= 42:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"define total0 as a boolean","cnl":"DECLARE total0 AS Bool","category":"variables"}
+{"english":"create a variable called score of type boolean","cnl":"DECLARE score AS Bool","category":"variables"}
+{"english":"declare a variable named score as integer","cnl":"DECLARE score AS Int","category":"variables"}
+{"english":"initialize total0 as float","cnl":"DECLARE total0 AS Float","category":"variables"}
+{"english":"initialize score as int","cnl":"DECLARE score AS Int","category":"variables"}
+{"english":"put 3.14 into status","cnl":"SET status TO 3.14","category":"assignments"}
+{"english":"if index is greater than or equal to 42: print \"Accepted\" else: print \"Rejected\"","cnl":"IF index >= 42:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"if condition limit >= \"active\": print \"Accepted\" else print \"Rejected\"","cnl":"IF limit >= \"active\":\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"change total0 to 3.14","cnl":"SET total0 TO 3.14","category":"assignments"}
+{"english":"create a int variable index set to 42","cnl":"DECLARE index AS Int WITH VALUE 42","category":"variables_with_value"}
+{"english":"try calling processData() catch err as String then print err","cnl":"TRY:\n  CALL processData()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"insert \"active\" at the end of students","cnl":"APPEND \"active\" TO students","category":"append"}
+{"english":"for every x in the collection students: print x","cnl":"FOR EACH x IN students:\n  PRINT x\nEND FOR","category":"loops_foreach"}
+{"english":"try: call computeTax2() catch err as String: print err","cnl":"TRY:\n  CALL computeTax2()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"define score0 as a string","cnl":"DECLARE score0 AS String","category":"variables"}
+{"english":"try calling validateInput() catch err as String then print err","cnl":"TRY:\n  CALL validateInput()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"initialize status as float","cnl":"DECLARE status AS Float","category":"variables"}
+{"english":"push TRUE into items","cnl":"APPEND TRUE TO items","category":"append"}
+{"english":"run a try catch block calling validateInput2(), catching String error as err and printing it","cnl":"TRY:\n  CALL validateInput2()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"change count to 42","cnl":"SET count TO 42","category":"assignments"}
+{"english":"if maxAge is greater than or equal to 42: print \"Accepted\" else: print \"Rejected\"","cnl":"IF maxAge >= 42:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"set limit to 3.14","cnl":"SET limit TO 3.14","category":"assignments"}
+{"english":"create a function mergeResults2(a: int, b: int) -> int that returns a + b","cnl":"DEFINE FUNCTION mergeResults2(a: Int, b: Int) -> Int:\n  RETURN a + b\nEND FUNCTION","category":"functions"}
+{"english":"wrap call to mergeResults1() in try catch: on error err of type String print err","cnl":"TRY:\n  CALL mergeResults1()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"create a variable called count of type int","cnl":"DECLARE count AS Int","category":"variables"}
+{"english":"initialize limit of type int with 42","cnl":"DECLARE limit AS Int WITH VALUE 42","category":"variables_with_value"}
+{"english":"wrap call to mergeResults2() in try catch: on error err of type String print err","cnl":"TRY:\n  CALL mergeResults2()\nCATCH err AS String:\n  PRINT err\nEND TRY","category":"try_catch"}
+{"english":"define total as a float","cnl":"DECLARE total AS Float","category":"variables"}
+{"english":"define a function named processData0 taking a as int and b as int returning int: return a plus b","cnl":"DEFINE FUNCTION processData0(a: Int, b: Int) -> Int:\n  RETURN a + b\nEND FUNCTION","category":"functions"}
+{"english":"set offset0 to 3.14","cnl":"SET offset0 TO 3.14","category":"assignments"}
+{"english":"declare maxAge as boolean with value TRUE","cnl":"DECLARE maxAge AS Bool WITH VALUE TRUE","category":"variables_with_value"}
+{"english":"if condition total >= 3.14: print \"Accepted\" else print \"Rejected\"","cnl":"IF total >= 3.14:\n  PRINT \"Accepted\"\nELSE:\n  PRINT \"Rejected\"\nEND IF","category":"control_flow"}
+{"english":"declare size as int with value 42","cnl":"DECLARE size AS Int WITH VALUE 42","category":"variables_with_value"}
+{"english":"put \"active\" into list tokens","cnl":"APPEND \"active\" TO tokens","category":"append"}
+{"english":"put \"active\" into count0","cnl":"SET count0 TO \"active\"","category":"assignments"}
+{"english":"declare total as boolean with value TRUE","cnl":"DECLARE total AS Bool WITH VALUE TRUE","category":"variables_with_value"}
