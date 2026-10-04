@@ -26,3 +26,5 @@ models_v6/
 # Training checkpoints & optimizer weights
 models/training_output/
 models/**/checkpoint-*/
+
+demo-app/

@@ -129,6 +129,11 @@ export class CNLParser extends CstParser {
         this.CONSUME(T.Identifier);
         this.CONSUME(T.AS);
         this.SUBRULE(this.typeRef);
+        this.OPTION(() => {
+            this.CONSUME(T.WITH);
+            this.CONSUME(T.DEFAULT);
+            this.SUBRULE(this.expression);
+        });
     });
 
     public ifStatement = this.RULE("ifStatement", () => {
@@ -644,7 +649,8 @@ export class CNLToASTVisitor extends BaseVisitor {
             line: ctx.FIELD[0].startLine || 1,
             col: ctx.FIELD[0].startColumn || 1,
             name: ctx.Identifier[0].image,
-            fieldType: this.visit(ctx.typeRef[0])
+            fieldType: this.visit(ctx.typeRef[0]),
+            defaultValue: ctx.expression ? this.visit(ctx.expression[0]) : undefined
         };
     }
 

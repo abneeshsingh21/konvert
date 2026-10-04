@@ -54,4 +54,5 @@ export function compileToPythonFromAST(astNode: ast.ProgramNode): string {
 }
 
 export { parseCNL, emitPython, emitJava, emitCpp };
+export * from './projectCompiler.js';
 export * from './ast.js';
