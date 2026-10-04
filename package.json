@@ -3,6 +3,7 @@
   "displayName": "Konvert — English to Code Compiler",
   "version": "0.1.0",
   "description": "Deterministic English-to-Code compiler — Write English, Ship Code. 0% Hallucinations, <2ms Latency, 100% Offline.",
+  "icon": "icon.png",
   "type": "module",
   "publisher": "konvert",
   "main": "./dist/extension.js",

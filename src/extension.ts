@@ -158,7 +158,8 @@ export function activate(context: vscode.ExtensionContext) {
       { enableScripts: true }
     );
 
-    panel.webview.html = getWebviewContent();
+    const logoUri = panel.webview.asWebviewUri(vscode.Uri.file(path.join(context.extensionPath, 'icon.png')));
+    panel.webview.html = getWebviewContent(logoUri.toString());
 
     panel.webview.onDidReceiveMessage(async (message) => {
         if (message.command === 'compile') {
@@ -312,7 +313,7 @@ async function normalizeEnglishWithModel(prompt: string, extensionPath: string):
   }
 }
 
-function getWebviewContent(): string {
+function getWebviewContent(logoSrc?: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -722,7 +723,7 @@ function getWebviewContent(): string {
   <!-- Top Brand Bar -->
   <div class="top-bar">
     <div class="brand">
-      <div class="brand-icon">K</div>
+      ${logoSrc ? `<img src="${logoSrc}" alt="Konvert" style="width: 28px; height: 28px; border-radius: 6px; object-fit: contain; background: rgba(255,255,255,0.05); padding: 2px;" />` : `<div class="brand-icon">K</div>`}
       <div>
         <span class="brand-title">Konvert</span>
         <span class="brand-tag">Deterministic English-to-Code</span>
