@@ -576,6 +576,10 @@ export class CNLParser extends CstParser {
     public newExpr = this.RULE("newExpr", () => {
         this.CONSUME(T.NEW);
         this.CONSUME(T.Identifier);
+        this.MANY(() => {
+            this.CONSUME(T.DOT);
+            this.CONSUME2(T.Identifier);
+        });
         this.CONSUME(T.LPAREN);
         this.OPTION(() => {
             this.SUBRULE(this.argList);
@@ -591,7 +595,13 @@ export class CNLParser extends CstParser {
             { ALT: () => this.CONSUME(T.BOOL_TYPE) },
             { ALT: () => this.CONSUME(T.CHAR_TYPE) },
             { ALT: () => this.CONSUME(T.VOID) },
-            { ALT: () => this.CONSUME(T.Identifier) }
+            { ALT: () => {
+                this.CONSUME(T.Identifier);
+                this.MANY2(() => {
+                    this.CONSUME2(T.DOT);
+                    this.CONSUME3(T.Identifier);
+                });
+            }}
         ]);
         this.OPTION(() => {
             this.CONSUME(T.LT);
@@ -1245,19 +1255,22 @@ export class CNLToASTVisitor extends BaseVisitor {
             type: 'NewObject',
             line: ctx.NEW[0].startLine || 1,
             col: ctx.NEW[0].startColumn || 1,
-            className: ctx.Identifier[0].image,
+            className: ctx.Identifier ? ctx.Identifier.map((id: any) => id.image).join('.') : 'Unknown',
             args: ctx.argList ? this.visit(ctx.argList[0]) : []
         };
     }
 
     typeRef(ctx: any): ast.TypeNode {
-        const t = ctx.INT_TYPE ? 'Int' :
-                  ctx.FLOAT_TYPE ? 'Float' :
-                  ctx.STRING_TYPE ? 'String' :
-                  ctx.BOOL_TYPE ? 'Bool' :
-                  ctx.CHAR_TYPE ? 'Char' :
-                  ctx.VOID ? 'Void' :
-                  (ctx.Identifier ? ctx.Identifier[0].image : 'Unknown');
+        let t = 'Unknown';
+        if (ctx.INT_TYPE) t = 'Int';
+        else if (ctx.FLOAT_TYPE) t = 'Float';
+        else if (ctx.STRING_TYPE) t = 'String';
+        else if (ctx.BOOL_TYPE) t = 'Bool';
+        else if (ctx.CHAR_TYPE) t = 'Char';
+        else if (ctx.VOID) t = 'Void';
+        else if (ctx.Identifier) {
+            t = ctx.Identifier.map((id: any) => id.image).join('.');
+        }
         
         let line = 1, col = 1;
         

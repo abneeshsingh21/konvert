@@ -23,6 +23,27 @@ export class IntentNormalizer {
     let s = stmt.trim();
     if (!s) return s;
 
+    // 0. Multi-line block boundaries & keywords
+    if (/^(?:define\s+(?:a\s+)?function|def|fn)\b/i.test(s)) {
+      s = s.replace(/^(?:define\s+(?:a\s+)?function|def|fn)\b/i, 'DEFINE FUNCTION');
+    }
+    if (/^(?:end\s+function)\b/i.test(s)) return 'END FUNCTION';
+    if (/^(?:define\s+(?:a\s+)?class|class)\b/i.test(s)) {
+      s = s.replace(/^(?:define\s+(?:a\s+)?class|class)\b/i, 'DEFINE CLASS');
+    }
+    if (/^(?:end\s+class)\b/i.test(s)) return 'END CLASS';
+    if (/^(?:field)\b/i.test(s)) {
+      s = s.replace(/^(?:field)\b/i, 'FIELD')
+           .replace(/\b(?:as)\b/i, 'AS')
+           .replace(/\b(?:with\s+default)\b/i, 'WITH DEFAULT');
+    }
+    if (/^(?:end\s+if)\b/i.test(s)) return 'END IF';
+    if (/^(?:end\s+for)\b/i.test(s)) return 'END FOR';
+    if (/^(?:end\s+while)\b/i.test(s)) return 'END WHILE';
+    if (/^(?:import)\b/i.test(s)) {
+      s = s.replace(/^(?:import)\b/i, 'IMPORT').replace(/\b(?:as)\b/i, 'AS');
+    }
+
     // 1. Check if already standard CNL uppercase keyword
     if (/^(DEFINE|DECLARE|SET|IF|ELSE|FOR|WHILE|RETURN|PRINT|TRY|CATCH|FINALLY|FILTER|SORT|MAP|ASSERT|IMPORT|RAW)\b/.test(s)) {
       return s;

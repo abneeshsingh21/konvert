@@ -4,6 +4,8 @@ import { ContextBuilder } from './core/contextBuilder.js';
 import { ModelNormalizer } from './core/modelNormalizer.js';
 import { ModelDownloader } from './core/modelDownloader.js';
 import { IntentNormalizer } from './core/intentNormalizer.js';
+import { TwinBufferManager } from './core/twinBufferManager.js';
+import { WorkspaceWatcher } from './core/workspaceWatcher.js';
 import { spawn } from 'child_process';
 import * as path from 'path';
 
@@ -269,7 +271,24 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand('konvert.convertEnglishToCode', showQuickConvertHUD));
   context.subscriptions.push(vscode.commands.registerCommand('intentengine.convertEnglishToCode', showQuickConvertHUD));
 
-  // 3. Command: Open Split-Pane Live Preview Webview
+  // 3. Reactive Continuous Twin-Buffer & Multi-File Project Manager
+  const twinBufferManager = new TwinBufferManager();
+  context.subscriptions.push(twinBufferManager);
+
+  const workspaceWatcher = new WorkspaceWatcher();
+  context.subscriptions.push(workspaceWatcher);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('konvert.openReactiveTwin', () => twinBufferManager.openReactiveTwin())
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('konvert.ejectEnglish', (uri) => twinBufferManager.ejectEnglish(uri))
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('konvert.rebuildProject', () => workspaceWatcher.compileProject(true))
+  );
+
+  // 4. Command: Open Split-Pane Live Preview Webview
   const runLivePreview = () => {
     const panel = vscode.window.createWebviewPanel(
       'konvertLivePreview',

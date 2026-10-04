@@ -48,7 +48,7 @@ export class ProjectCompiler {
         if (file !== 'node_modules' && file !== 'dist' && file !== '.git') {
           results = results.concat(this.findSourceFiles(fullPath, baseDir));
         }
-      } else if (file.endsWith('.kvt') || file.endsWith('.cnl')) {
+      } else if (file.endsWith('.kvt') || file.endsWith('.cnl') || file.endsWith('.eng') || file.endsWith('.knv')) {
         results.push(fullPath);
       }
     }
@@ -165,7 +165,7 @@ END FUNCTION
 
       const moduleName = relPath
         .replace(/^src[\\/]/, '')
-        .replace(/\.(kvt|cnl)$/, '')
+        .replace(/\.(kvt|cnl|eng|knv)$/, '')
         .replace(/[\\/]/g, '.');
 
       if (parseResult.errors.length > 0) {
@@ -242,7 +242,7 @@ requires-python = ">=3.12"
     for (const mod of modules) {
       const targetRel = mod.relativePath
         .replace(/^src[\\/]/, '')
-        .replace(/\.(kvt|cnl)$/, '.py');
+        .replace(/\.(kvt|cnl|eng|knv)$/, '.py');
 
       const fullTarget = path.join(baseOut, targetRel);
       const targetDir = path.dirname(fullTarget);
@@ -313,7 +313,7 @@ requires-python = ">=3.12"
     for (const mod of modules) {
       const targetRel = mod.relativePath
         .replace(/^src[\\/]/, '')
-        .replace(/\.(kvt|cnl)$/, '.java');
+        .replace(/\.(kvt|cnl|eng|knv)$/, '.java');
 
       const fullTarget = path.join(javaSrc, targetRel);
       const targetDir = path.dirname(fullTarget);
@@ -368,7 +368,7 @@ add_executable(\${PROJECT_NAME} \${SOURCES})
     for (const mod of modules) {
       const targetRel = mod.relativePath
         .replace(/^src[\\/]/, '')
-        .replace(/\.(kvt|cnl)$/, '');
+        .replace(/\.(kvt|cnl|eng|knv)$/, '');
 
       const fullCppTarget = path.join(cppSrc, targetRel + '.cpp');
       const fullHppTarget = path.join(cppInc, targetRel + '.hpp');

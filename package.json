@@ -1,7 +1,7 @@
 {
   "name": "konvert",
   "displayName": "Konvert — English to Code Compiler",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Deterministic English-to-Code compiler — Write English, Ship Code. 0% Hallucinations, <2ms Latency, 100% Offline.",
   "icon": "icon.png",
   "type": "module",
@@ -21,13 +21,29 @@
   },
   "activationEvents": [
     "onStartupFinished",
+    "onLanguage:english-intent",
     "onCommand:konvert.quickHUD",
     "onCommand:konvert.openLivePreview",
+    "onCommand:konvert.openReactiveTwin",
+    "onCommand:konvert.ejectEnglish",
+    "onCommand:konvert.rebuildProject",
     "onCommand:konvert.convertEnglishToCode",
     "onCommand:konvert.downloadModel"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "english-intent",
+        "aliases": ["English Intent", "Konvert", "eng"],
+        "extensions": [".eng", ".knv"]
+      }
+    ],
     "commands": [
+      {
+        "command": "konvert.openReactiveTwin",
+        "title": "Konvert: Open Live Reactive Twin (Continuous Split View)",
+        "icon": "$(split-horizontal)"
+      },
       {
         "command": "konvert.quickHUD",
         "title": "Konvert: Quick English-to-Code HUD (Realtime)",
@@ -37,6 +53,16 @@
         "command": "konvert.openLivePreview",
         "title": "Konvert: Open Live Compiler Preview",
         "icon": "$(layout-sidebar-right)"
+      },
+      {
+        "command": "konvert.ejectEnglish",
+        "title": "Konvert: Eject English (Keep Pure Target Code)",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "konvert.rebuildProject",
+        "title": "Konvert: Rebuild Entire Multi-File Project",
+        "icon": "$(refresh)"
       },
       {
         "command": "konvert.convertEnglishToCode",
@@ -50,6 +76,11 @@
       }
     ],
     "keybindings": [
+      {
+        "command": "konvert.openReactiveTwin",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t"
+      },
       {
         "command": "konvert.quickHUD",
         "key": "ctrl+alt+k",
