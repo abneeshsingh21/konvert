@@ -3,14 +3,26 @@ import { parseCNL, compileToPython, compileToJava, compileToCpp, compileAll } fr
 import { ContextBuilder } from './core/contextBuilder.js';
 import { ModelNormalizer } from './core/modelNormalizer.js';
 import { ModelDownloader } from './core/modelDownloader.js';
+import { IntentNormalizer } from './core/intentNormalizer.js';
 import { spawn } from 'child_process';
 import * as path from 'path';
 
 let contextBuilder = new ContextBuilder();
 let statusBarItem: vscode.StatusBarItem;
+let lastActiveEditor: vscode.TextEditor | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Konvert Extension is now active!');
+
+  // Track the most recent active editor so webview or modal commands can insert code reliably
+  lastActiveEditor = vscode.window.activeTextEditor;
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (editor && editor.document.uri.scheme === 'file') {
+        lastActiveEditor = editor;
+      }
+    })
+  );
 
   // Helper: Download compressed model on install
   async function ensureModelDownloaded(interactive: boolean = false): Promise<boolean> {
@@ -75,20 +87,12 @@ export function activate(context: vscode.ExtensionContext) {
   // Check and trigger download asynchronously on install
   setTimeout(() => {
     ensureModelDownloaded(false);
-  }, 1000);
+  }, 1500);
 
   // Command to manually trigger model download
   context.subscriptions.push(
     vscode.commands.registerCommand('konvert.downloadModel', () => ensureModelDownloaded(true))
   );
-
-  // 1. Status Bar Item
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-  statusBarItem.text = '$(zap) Konvert: Ready';
-  statusBarItem.tooltip = 'Konvert: Deterministic English-to-Code (<2ms, 0% Hallucination, Offline)';
-  statusBarItem.command = 'konvert.openLivePreview';
-  statusBarItem.show();
-  context.subscriptions.push(statusBarItem);
 
   // Helper: Compile for given language
   function compileForLang(input: string, langId: string) {
@@ -101,53 +105,169 @@ export function activate(context: vscode.ExtensionContext) {
     }
   }
 
-  // 2. Command: Convert English to Code via Input Box
-  const runConvert = async () => {
-    const editor = vscode.window.activeTextEditor;
-    const targetLang = editor ? editor.document.languageId : 'python';
+  // 1. Status Bar Item
+  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  statusBarItem.text = '$(zap) Konvert';
+  statusBarItem.tooltip = 'Konvert: English to Code (Ctrl+Alt+K for Realtime HUD)';
+  statusBarItem.command = 'konvert.quickHUD';
+  statusBarItem.show();
+  context.subscriptions.push(statusBarItem);
 
-    const input = await vscode.window.showInputBox({
-      prompt: `Enter intent in English (Target: ${targetLang})`,
-      placeHolder: 'e.g. "declare total as integer with value 100" or "DEFINE FUNCTION add..."',
+  // 2. Command: Real-Time Floating Quick-HUD (Popup window right inside the editor)
+  const showQuickConvertHUD = () => {
+    // Determine the target editor and language
+    const currentEditor = vscode.window.activeTextEditor || lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
+    let targetLang = currentEditor ? currentEditor.document.languageId : 'python';
+    if (!['python', 'java', 'cpp', 'c'].includes(targetLang)) {
+      targetLang = 'python';
+    }
+
+    const inputBox = vscode.window.createInputBox();
+    inputBox.title = '⚡ Konvert — English to Code (Realtime HUD)';
+    inputBox.placeholder = 'Write plain English (e.g. "print hello world", "calculate total = price * 1.18", "function add a b -> int")...';
+    inputBox.prompt = `[Target: ${targetLang.toUpperCase()}] Type English intent — press Enter to write code into editor`;
+    inputBox.ignoreFocusOut = false;
+
+    const langBtn: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('symbol-variable'),
+      tooltip: `Target Language: ${targetLang.toUpperCase()} (Click to change)`,
+    };
+
+    const previewBtn: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('layout-sidebar-right'),
+      tooltip: 'Open Split Live Preview Panel',
+    };
+
+    inputBox.buttons = [langBtn, previewBtn];
+
+    let currentCompiledCode = '';
+    let isSyntaxValid = false;
+
+    const runLiveCompilation = (rawInput: string) => {
+      const text = rawInput.trim();
+      if (!text) {
+        inputBox.prompt = `[Target: ${targetLang.toUpperCase()}] Type English intent — press Enter to write code into editor`;
+        inputBox.validationMessage = undefined;
+        currentCompiledCode = '';
+        isSyntaxValid = false;
+        return;
+      }
+
+      const t0 = performance.now();
+      const res = compileForLang(text, targetLang);
+      const elapsedMs = (performance.now() - t0).toFixed(1);
+
+      if (res.errors.length === 0 && res.code.trim().length > 0) {
+        currentCompiledCode = res.code;
+        isSyntaxValid = true;
+        const compactPreview = res.code.trim().replace(/\r?\n\s*/g, ' ↵ ');
+        inputBox.prompt = `✨ [${elapsedMs}ms] ${targetLang.toUpperCase()} Output: ${compactPreview}`;
+        inputBox.validationMessage = undefined;
+      } else {
+        currentCompiledCode = '';
+        isSyntaxValid = false;
+        const hint = res.errors[0]?.message || 'Type complete intent...';
+        inputBox.prompt = `⏳ Typing intent... (${hint})`;
+      }
+    };
+
+    inputBox.onDidChangeValue((val) => {
+      runLiveCompilation(val);
     });
 
-    if (!input) return;
-
-    // Try deterministic compiler first
-    let result = compileForLang(input, targetLang);
-    
-    // If direct parsing had errors and model is available, normalize via local model
-    if (result.errors.length > 0) {
-      statusBarItem.text = '$(sync~spin) Normalizing Intent...';
-      try {
-        const normalizedCNL = await normalizeEnglishWithModel(input, context.extensionPath);
-        result = compileForLang(normalizedCNL, targetLang);
-      } catch {
-        // Keep original error if normalization wasn't possible
+    inputBox.onDidTriggerButton(async (btn) => {
+      if (btn === langBtn) {
+        const choice = await vscode.window.showQuickPick(
+          [
+            { label: 'Python 3.12', description: 'python' },
+            { label: 'Java 21', description: 'java' },
+            { label: 'C++20', description: 'cpp' },
+          ],
+          { placeHolder: 'Select target compilation language' }
+        );
+        if (choice) {
+          targetLang = choice.description;
+          inputBox.buttons = [
+            {
+              iconPath: new vscode.ThemeIcon('symbol-variable'),
+              tooltip: `Target Language: ${targetLang.toUpperCase()} (Click to change)`,
+            },
+            previewBtn,
+          ];
+          runLiveCompilation(inputBox.value);
+        }
+      } else if (btn === previewBtn) {
+        inputBox.hide();
+        vscode.commands.executeCommand('konvert.openLivePreview');
       }
-      statusBarItem.text = '$(zap) Konvert: Ready';
-    }
+    });
 
-    if (result.errors.length > 0) {
-      vscode.window.showErrorMessage(
-        `Konvert Syntax Error: ${result.errors.map((e) => e.message).join('; ')}`
-      );
-      return;
-    }
+    inputBox.onDidAccept(async () => {
+      const text = inputBox.value.trim();
+      if (!text) {
+        inputBox.hide();
+        return;
+      }
 
-    if (editor) {
-      editor.edit((editBuilder) => {
-        editBuilder.insert(editor.selection.active, result.code + '\n');
-      });
-      contextBuilder.addStatement(input);
-      vscode.window.showInformationMessage(`Code compiled and inserted as ${targetLang} in <2ms!`);
-    } else {
-      vscode.window.showInformationMessage(result.code);
-    }
+      let finalCode = currentCompiledCode;
+      if (!isSyntaxValid || !finalCode) {
+        const res = compileForLang(text, targetLang);
+        if (res.errors.length === 0 && res.code.trim()) {
+          finalCode = res.code;
+        } else {
+          vscode.window.showWarningMessage(`Konvert: Could not compile intent "${text}".`);
+          return;
+        }
+      }
+
+      inputBox.hide();
+
+      // Find the editor to insert into
+      const editor = vscode.window.activeTextEditor || currentEditor || lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
+
+      if (editor) {
+        await editor.edit((editBuilder) => {
+          const pos = editor.selection.active;
+          const lineText = editor.document.lineAt(pos.line).text;
+          const indentMatch = lineText.match(/^(\s*)/);
+          const currentIndent = indentMatch ? indentMatch[1] : '';
+
+          let codeToInsert = finalCode;
+          if (currentIndent && codeToInsert.includes('\n')) {
+            codeToInsert = codeToInsert
+              .split('\n')
+              .map((line, idx) => (idx > 0 && line.trim() ? currentIndent + line : line))
+              .join('\n');
+          }
+          if (!codeToInsert.endsWith('\n')) {
+            codeToInsert += '\n';
+          }
+
+          if (!editor.selection.isEmpty) {
+            editBuilder.replace(editor.selection, codeToInsert);
+          } else {
+            editBuilder.insert(pos, codeToInsert);
+          }
+        });
+
+        contextBuilder.addStatement(text);
+        vscode.window.setStatusBarMessage(`⚡ Konvert: Generated ${targetLang.toUpperCase()} code in <2ms!`, 3000);
+      } else {
+        // Fallback: If no editor is open, open a new untitled file with the code
+        const doc = await vscode.workspace.openTextDocument({
+          content: finalCode,
+          language: targetLang,
+        });
+        await vscode.window.showTextDocument(doc);
+      }
+    });
+
+    inputBox.show();
   };
 
-  context.subscriptions.push(vscode.commands.registerCommand('konvert.convertEnglishToCode', runConvert));
-  context.subscriptions.push(vscode.commands.registerCommand('intentengine.convertEnglishToCode', runConvert));
+  context.subscriptions.push(vscode.commands.registerCommand('konvert.quickHUD', showQuickConvertHUD));
+  context.subscriptions.push(vscode.commands.registerCommand('konvert.convertEnglishToCode', showQuickConvertHUD));
+  context.subscriptions.push(vscode.commands.registerCommand('intentengine.convertEnglishToCode', showQuickConvertHUD));
 
   // 3. Command: Open Split-Pane Live Preview Webview
   const runLivePreview = () => {
@@ -162,61 +282,67 @@ export function activate(context: vscode.ExtensionContext) {
     panel.webview.html = getWebviewContent(logoUri.toString());
 
     panel.webview.onDidReceiveMessage(async (message) => {
-        if (message.command === 'compile') {
-          const lang = message.lang || 'python';
-          const startTime = performance.now();
-          let code = '';
-          let errors: any[] = [];
-          let allTargets: { python: string; java: string; cpp: string } | null = null;
+      if (message.command === 'compile') {
+        const lang = message.lang || 'python';
+        const startTime = performance.now();
+        let code = '';
+        let errors: any[] = [];
+        let allTargets: { python: string; java: string; cpp: string } | null = null;
 
-          if (lang === 'all') {
-            const res = compileAll(message.text);
-            errors = res.errors;
-            if (errors.length === 0) {
-              allTargets = {
-                python: res.python,
-                java: res.java,
-                cpp: res.cpp,
-              };
-              code = res.python;
-            }
-          } else if (lang === 'java') {
-            const res = compileToJava(message.text);
-            code = res.code;
-            errors = res.errors;
-          } else if (lang === 'cpp') {
-            const res = compileToCpp(message.text);
-            code = res.code;
-            errors = res.errors;
-          } else {
-            const res = compileToPython(message.text);
-            code = res.code;
-            errors = res.errors;
+        if (lang === 'all') {
+          const res = compileAll(message.text);
+          errors = res.errors;
+          if (errors.length === 0) {
+            allTargets = {
+              python: res.python,
+              java: res.java,
+              cpp: res.cpp,
+            };
+            code = res.python;
           }
+        } else if (lang === 'java') {
+          const res = compileToJava(message.text);
+          code = res.code;
+          errors = res.errors;
+        } else if (lang === 'cpp') {
+          const res = compileToCpp(message.text);
+          code = res.code;
+          errors = res.errors;
+        } else {
+          const res = compileToPython(message.text);
+          code = res.code;
+          errors = res.errors;
+        }
 
-          const latencyMs = (performance.now() - startTime).toFixed(2);
+        const latencyMs = (performance.now() - startTime).toFixed(2);
 
+        panel.webview.postMessage({
+          command: 'updateOutput',
+          code,
+          errors,
+          latency: latencyMs,
+          allTargets,
+        });
+      } else if (message.command === 'normalize') {
+        const rawInput = message.text || '';
+
+        // Step 1: Use deterministic instant normalizer first (sub-millisecond, zero hallucination)
+        const normalizedCNL = IntentNormalizer.normalize(rawInput);
+        if (normalizedCNL !== rawInput) {
           panel.webview.postMessage({
-            command: 'updateOutput',
-            code,
-            errors,
-            latency: latencyMs,
-            allTargets,
+            command: 'setNormalizedCNL',
+            cnl: normalizedCNL,
           });
-        } else if (message.command === 'normalize') {
+          return;
+        }
+
+        // Step 2: Check if neural weights are available locally
+        const targetDir = ModelDownloader.getTargetModelDir(context.globalStorageUri.fsPath);
+        const hasWeights = ModelDownloader.isModelInstalled(targetDir) || ModelDownloader.isModelInstalled(path.join(context.extensionPath, 'models'));
+
+        if (hasWeights) {
           try {
-            const normalizer = ModelNormalizer.getInstance(context.extensionPath);
-            if (!normalizer.isModelAvailable()) {
-              const downloaded = await ensureModelDownloaded(true);
-              if (!downloaded) {
-                panel.webview.postMessage({
-                  command: 'normalizeError',
-                  error: 'AI Model not downloaded. Please download the model to enable casual English normalization.',
-                });
-                return;
-              }
-            }
-            const cnl = await normalizeEnglishWithModel(message.text, context.extensionPath);
+            const cnl = await normalizeEnglishWithModel(rawInput, context.extensionPath);
             panel.webview.postMessage({
               command: 'setNormalizedCNL',
               cnl,
@@ -227,19 +353,43 @@ export function activate(context: vscode.ExtensionContext) {
               error: err.message,
             });
           }
-        } else if (message.command === 'insertToEditor') {
-          const editor = vscode.window.activeTextEditor;
-          if (editor) {
-            editor.edit((editBuilder) => {
-              editBuilder.insert(editor.selection.active, message.code + '\n');
-            });
-          }
+        } else {
+          panel.webview.postMessage({
+            command: 'normalizeInfo',
+            info: 'Instant normalizer active. Download AI Language Engine from Command Palette for neural models.',
+          });
         }
-      });
-    };
+      } else if (message.command === 'insertToEditor') {
+        const editor = lastActiveEditor || vscode.window.activeTextEditor || vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
+        if (editor) {
+          await editor.edit((editBuilder) => {
+            const codeToInsert = message.code.endsWith('\n') ? message.code : message.code + '\n';
+            if (!editor.selection.isEmpty) {
+              editBuilder.replace(editor.selection, codeToInsert);
+            } else {
+              editBuilder.insert(editor.selection.active, codeToInsert);
+            }
+          });
+          vscode.window.showInformationMessage(`✓ Code inserted into ${path.basename(editor.document.fileName)}`);
+        } else {
+          const doc = await vscode.workspace.openTextDocument({
+            content: message.code,
+            language: message.lang || 'python',
+          });
+          await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+          vscode.window.showInformationMessage('✓ Code opened in new document');
+        }
+      } else if (message.command === 'copy') {
+        if (message.text) {
+          await vscode.env.clipboard.writeText(message.text);
+          vscode.window.setStatusBarMessage('✓ Konvert: Code copied to clipboard', 2500);
+        }
+      }
+    });
+  };
 
-    context.subscriptions.push(vscode.commands.registerCommand('konvert.openLivePreview', runLivePreview));
-    context.subscriptions.push(vscode.commands.registerCommand('intentengine.openLivePreview', runLivePreview));
+  context.subscriptions.push(vscode.commands.registerCommand('konvert.openLivePreview', runLivePreview));
+  context.subscriptions.push(vscode.commands.registerCommand('intentengine.openLivePreview', runLivePreview));
 
   // 4. Inline Ghost-Text Provider (Triggers on comments like #? or //?)
   const inlineProvider: vscode.InlineCompletionItemProvider = {
@@ -335,7 +485,7 @@ function getWebviewContent(logoSrc?: string): string {
       --error: #f48771;
       --success: #89d185;
       --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Courier New', monospace;
-      --font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-ui: var(--vscode-font-family, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -347,7 +497,7 @@ function getWebviewContent(logoSrc?: string): string {
       height: 100vh;
       display: flex;
       flex-direction: column;
-      padding: 14px 18px;
+      padding: 12px 16px;
       overflow: hidden;
       user-select: none;
     }
@@ -357,9 +507,9 @@ function getWebviewContent(logoSrc?: string): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-bottom: 12px;
+      padding-bottom: 10px;
       border-bottom: 1px solid var(--panel-border);
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .brand {
@@ -371,60 +521,53 @@ function getWebviewContent(logoSrc?: string): string {
     .brand-icon {
       width: 26px;
       height: 26px;
-      background: linear-gradient(135deg, #007acc 0%, #00bc70 100%);
       border-radius: 6px;
+      background: var(--accent);
+      color: var(--accent-fg);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #fff;
-      font-weight: 900;
+      font-weight: 800;
       font-size: 14px;
-      box-shadow: 0 2px 6px rgba(0, 122, 204, 0.3);
     }
 
     .brand-title {
-      font-size: 15px;
       font-weight: 700;
-      letter-spacing: -0.3px;
+      font-size: 14px;
+      letter-spacing: -0.2px;
       color: var(--fg);
     }
 
     .brand-tag {
       font-size: 11px;
-      color: var(--vscode-descriptionForeground, #8c8c8c);
-      font-weight: 400;
-      margin-left: 4px;
+      color: var(--vscode-descriptionForeground, #888);
+      margin-left: 8px;
     }
 
     .status-chips {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
 
     .chip {
-      font-size: 10px;
-      font-weight: 600;
+      font-size: 10.5px;
       padding: 3px 8px;
       border-radius: 12px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .chip-success {
-      background: rgba(137, 209, 133, 0.12);
-      color: var(--success);
-      border-color: rgba(137, 209, 133, 0.25);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--vscode-descriptionForeground, #aaa);
+      font-family: var(--font-mono);
     }
 
     .chip-latency {
-      background: rgba(0, 122, 204, 0.12);
       color: #38bdf8;
       border-color: rgba(56, 189, 248, 0.25);
-      font-family: var(--font-mono);
+    }
+
+    .chip-success {
+      color: var(--success);
+      border-color: rgba(137, 209, 133, 0.25);
     }
 
     /* Controls Bar */
@@ -432,13 +575,12 @@ function getWebviewContent(logoSrc?: string): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
+      margin-bottom: 10px;
+      gap: 8px;
     }
 
     .segmented-control {
-      display: inline-flex;
+      display: flex;
       background: var(--input-bg);
       border: 1px solid var(--panel-border);
       border-radius: 6px;
@@ -449,8 +591,8 @@ function getWebviewContent(logoSrc?: string): string {
     .segmented-btn {
       background: transparent;
       border: none;
-      color: var(--vscode-descriptionForeground, #a0a0a0);
-      padding: 5px 12px;
+      color: var(--vscode-descriptionForeground, #999);
+      padding: 4px 10px;
       font-size: 11px;
       font-weight: 600;
       border-radius: 4px;
@@ -466,34 +608,31 @@ function getWebviewContent(logoSrc?: string): string {
     .segmented-btn.active {
       background: var(--accent);
       color: var(--accent-fg);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     }
 
     .tool-actions {
       display: flex;
-      align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
 
     .btn-action {
-      background: var(--input-bg);
+      background: rgba(255, 255, 255, 0.05);
       border: 1px solid var(--panel-border);
       color: var(--fg);
-      padding: 5px 12px;
+      padding: 4px 10px;
       border-radius: 6px;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       transition: all 0.15s ease;
     }
 
     .btn-action:hover {
-      border-color: var(--accent);
-      background: rgba(0, 122, 204, 0.08);
-      color: #38bdf8;
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
     }
 
     .btn-action:disabled {
@@ -506,7 +645,7 @@ function getWebviewContent(logoSrc?: string): string {
       display: flex;
       align-items: center;
       gap: 6px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       overflow-x: auto;
       padding-bottom: 2px;
     }
@@ -527,7 +666,7 @@ function getWebviewContent(logoSrc?: string): string {
       color: var(--vscode-descriptionForeground, #b0b0b0);
       padding: 2px 9px;
       border-radius: 10px;
-      font-size: 10px;
+      font-size: 10.5px;
       font-family: var(--font-mono);
       cursor: pointer;
       white-space: nowrap;
@@ -544,7 +683,7 @@ function getWebviewContent(logoSrc?: string): string {
     .panes-container {
       display: flex;
       flex: 1;
-      gap: 14px;
+      gap: 12px;
       min-height: 0;
     }
 
@@ -560,7 +699,7 @@ function getWebviewContent(logoSrc?: string): string {
     }
 
     .pane-header {
-      padding: 8px 12px;
+      padding: 7px 12px;
       background: rgba(0, 0, 0, 0.15);
       border-bottom: 1px solid var(--panel-border);
       display: flex;
@@ -608,7 +747,7 @@ function getWebviewContent(logoSrc?: string): string {
     textarea {
       flex: 1;
       width: 100%;
-      padding: 12px 14px;
+      padding: 10px 12px;
       font-family: var(--font-mono);
       font-size: 12.5px;
       line-height: 1.5;
@@ -623,7 +762,7 @@ function getWebviewContent(logoSrc?: string): string {
     pre {
       flex: 1;
       width: 100%;
-      padding: 12px 14px;
+      padding: 10px 12px;
       font-family: var(--font-mono);
       font-size: 12.5px;
       line-height: 1.5;
@@ -636,22 +775,26 @@ function getWebviewContent(logoSrc?: string): string {
     }
 
     .error-drawer {
-      padding: 8px 12px;
-      background: rgba(244, 135, 113, 0.1);
-      border-top: 1px solid rgba(244, 135, 113, 0.25);
+      padding: 6px 12px;
+      background: rgba(244, 135, 113, 0.12);
+      border-top: 1px solid rgba(244, 135, 113, 0.3);
       color: var(--error);
       font-size: 11px;
       font-family: var(--font-mono);
+      max-height: 80px;
+      overflow-y: auto;
       display: none;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     /* Footer Action Bar */
     .footer-bar {
-      margin-top: 12px;
+      margin-top: 10px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-top: 10px;
+      padding-top: 8px;
       border-top: 1px solid var(--panel-border);
     }
 
@@ -723,7 +866,7 @@ function getWebviewContent(logoSrc?: string): string {
   <!-- Top Brand Bar -->
   <div class="top-bar">
     <div class="brand">
-      ${logoSrc ? `<img src="${logoSrc}" alt="Konvert" style="width: 28px; height: 28px; border-radius: 6px; object-fit: contain; background: rgba(255,255,255,0.05); padding: 2px;" />` : `<div class="brand-icon">K</div>`}
+      ${logoSrc ? `<img src="${logoSrc}" alt="Konvert" style="width: 26px; height: 26px; border-radius: 6px; object-fit: contain; background: rgba(255,255,255,0.05); padding: 2px;" />` : `<div class="brand-icon">K</div>`}
       <div>
         <span class="brand-title">Konvert</span>
         <span class="brand-tag">Deterministic English-to-Code</span>
@@ -731,7 +874,7 @@ function getWebviewContent(logoSrc?: string): string {
     </div>
     <div class="status-chips">
       <div class="chip chip-latency" id="latencyChip">⚡ 0.8ms compile</div>
-      <div class="chip chip-success">✓ Zero Hallucination</div>
+      <div class="chip chip-success">✓ 0% Hallucination</div>
       <div class="chip">🔒 100% Offline</div>
     </div>
   </div>
@@ -747,7 +890,7 @@ function getWebviewContent(logoSrc?: string): string {
 
     <div class="tool-actions">
       <button id="normalizeBtn" class="btn-action">
-        <span>✨</span> Normalize Casual English
+        <span>✨</span> Normalize English
       </button>
       <button id="clearBtn" class="btn-action">
         <span>🗑️</span> Clear
@@ -758,12 +901,13 @@ function getWebviewContent(logoSrc?: string): string {
   <!-- Quick Templates Row -->
   <div class="snippets-row">
     <span class="snippet-label">Quick Snippets:</span>
+    <span class="snippet-pill" data-template="print">Print</span>
     <span class="snippet-pill" data-template="function">Function</span>
+    <span class="snippet-pill" data-template="variable">Variable</span>
     <span class="snippet-pill" data-template="filter">Filter List</span>
     <span class="snippet-pill" data-template="conditional">If / Else</span>
     <span class="snippet-pill" data-template="loop">For Each</span>
     <span class="snippet-pill" data-template="class">Class Record</span>
-    <span class="snippet-pill" data-template="map">Map / Dict</span>
   </div>
 
   <!-- Split Panes -->
@@ -771,16 +915,14 @@ function getWebviewContent(logoSrc?: string): string {
     <!-- Left Pane: Input -->
     <div class="pane">
       <div class="pane-header">
-        <span class="pane-title">Intent Specification (CNL / English)</span>
+        <span class="pane-title">English Intent / CNL</span>
         <div class="pane-status" id="grammarStatus">
           <span class="status-dot"></span>
           <span style="font-size: 10px; font-weight: 600; color: var(--success);" id="grammarLabel">Valid</span>
         </div>
       </div>
       <div class="editor-wrapper">
-        <textarea id="input" spellcheck="false" placeholder="Write plain English or Structured CNL...&#10;e.g.&#10;DEFINE FUNCTION calculateTotal(price: Float, taxRate: Float) -> Float:&#10;  RETURN price + (price * taxRate)&#10;END FUNCTION">DEFINE FUNCTION calculateTotal(price: Float, taxRate: Float) -> Float:
-  RETURN price + (price * taxRate)
-END FUNCTION</textarea>
+        <textarea id="input" spellcheck="false" placeholder="Write plain English or Structured CNL...&#10;e.g.&#10;print hello world&#10;calculate total = price * 1.18&#10;define function add(a: Int, b: Int) -> Int:&#10;  return a + b&#10;end function">print hello world</textarea>
       </div>
       <div id="errorDrawer" class="error-drawer"></div>
     </div>
@@ -801,7 +943,7 @@ END FUNCTION</textarea>
   <div class="footer-bar">
     <div class="hints">
       <span><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> Insert to Editor</span>
-      <span><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">N</span> Normalize</span>
+      <span><span class="kbd">Ctrl</span> + <span class="kbd">Alt</span> + <span class="kbd">K</span> Quick HUD</span>
     </div>
     <div class="primary-actions">
       <button id="copyBtn" class="btn-secondary">
@@ -832,12 +974,13 @@ END FUNCTION</textarea>
     let currentLang = 'python';
 
     const templates = {
-      function: 'DEFINE FUNCTION add(a: Int, b: Int) -> Int:\\n  RETURN a + b\\nEND FUNCTION',
-      filter: 'DECLARE users AS List<User>\\nFILTER users WHERE age >= 18\\nRETURN result',
-      conditional: 'IF score >= 90:\\n  PRINT "Grade A"\\nELSE IF score >= 75:\\n  PRINT "Grade B"\\nELSE:\\n  PRINT "Grade C"\\nEND IF',
-      loop: 'FOR EACH item IN items:\\n  PRINT item\\nEND FOR',
-      class: 'DEFINE CLASS User:\\n  FIELD name AS String\\n  FIELD age AS Int\\n  FIELD active AS Bool WITH DEFAULT TRUE\\nEND CLASS',
-      map: 'DECLARE scores AS Map<String, Int>\\nPUT "Alice" => 100 INTO scores\\nGET "Alice" FROM scores'
+      print: 'print hello world',
+      function: ['define function add(a: Int, b: Int) -> Int:', '  return a + b', 'end function'].join('\\n'),
+      variable: 'declare total as Int with value 100',
+      filter: ['declare users as List<User>', 'filter users where age >= 18', 'return result'].join('\\n'),
+      conditional: ['if score >= 90:', '  print "Grade A"', 'else if score >= 75:', '  print "Grade B"', 'else:', '  print "Grade C"', 'end if'].join('\\n'),
+      loop: ['for each item in items:', '  print item', 'end for'].join('\\n'),
+      class: ['define class User:', '  field name as String', '  field age as Int', '  field active as Bool with default true', 'end class'].join('\\n')
     };
 
     function triggerCompile() {
@@ -895,13 +1038,16 @@ END FUNCTION</textarea>
       outputEl.textContent = '';
       charCount.textContent = '0 chars';
       errorDrawer.style.display = 'none';
+      grammarStatus.querySelector('.status-dot').className = 'status-dot';
+      grammarLabel.textContent = 'Ready';
+      grammarLabel.style.color = 'var(--vscode-descriptionForeground)';
       inputEl.focus();
     });
 
     // Copy Code button
     copyBtn.addEventListener('click', () => {
       if (outputEl.textContent) {
-        navigator.clipboard.writeText(outputEl.textContent);
+        vscode.postMessage({ command: 'copy', text: outputEl.textContent });
         copyBtn.innerHTML = '<span>✓</span> Copied!';
         setTimeout(() => {
           copyBtn.innerHTML = '<span id="copyIcon">📋</span> Copy Code';
@@ -911,7 +1057,9 @@ END FUNCTION</textarea>
 
     // Insert into editor
     insertBtn.addEventListener('click', () => {
-      vscode.postMessage({ command: 'insertToEditor', code: outputEl.textContent });
+      if (outputEl.textContent) {
+        vscode.postMessage({ command: 'insertToEditor', code: outputEl.textContent, lang: currentLang });
+      }
     });
 
     // Keyboard shortcuts
@@ -938,6 +1086,9 @@ END FUNCTION</textarea>
           grammarLabel.textContent = 'Syntax Diagnostic';
           grammarLabel.style.color = 'var(--error)';
           errorDrawer.style.display = 'block';
+          errorDrawer.style.background = 'rgba(244, 135, 113, 0.12)';
+          errorDrawer.style.borderColor = 'rgba(244, 135, 113, 0.3)';
+          errorDrawer.style.color = 'var(--error)';
           errorDrawer.textContent = 'Line ' + (msg.errors[0].line || 1) + ': ' + msg.errors[0].message;
           outputEl.style.opacity = '0.4';
         } else {
@@ -962,14 +1113,26 @@ END FUNCTION</textarea>
         charCount.textContent = outputEl.textContent.length + ' chars';
       } else if (msg.command === 'setNormalizedCNL') {
         normalizeBtn.disabled = false;
-        normalizeBtn.innerHTML = '<span>✨</span> Normalize Casual English';
+        normalizeBtn.innerHTML = '<span>✨</span> Normalize English';
         inputEl.value = msg.cnl;
+        errorDrawer.style.display = 'none';
         triggerCompile();
+      } else if (msg.command === 'normalizeInfo') {
+        normalizeBtn.disabled = false;
+        normalizeBtn.innerHTML = '<span>✨</span> Normalize English';
+        errorDrawer.style.display = 'block';
+        errorDrawer.style.background = 'rgba(0, 122, 204, 0.1)';
+        errorDrawer.style.borderColor = 'rgba(0, 122, 204, 0.3)';
+        errorDrawer.style.color = 'var(--accent)';
+        errorDrawer.textContent = 'ℹ️ ' + msg.info;
       } else if (msg.command === 'normalizeError') {
         normalizeBtn.disabled = false;
-        normalizeBtn.innerHTML = '<span>✨</span> Normalize Casual English';
+        normalizeBtn.innerHTML = '<span>✨</span> Normalize English';
         errorDrawer.style.display = 'block';
-        errorDrawer.textContent = 'AI Normalization: ' + msg.error;
+        errorDrawer.style.background = 'rgba(244, 135, 113, 0.12)';
+        errorDrawer.style.borderColor = 'rgba(244, 135, 113, 0.3)';
+        errorDrawer.style.color = 'var(--error)';
+        errorDrawer.textContent = 'Normalization: ' + msg.error;
       }
     });
 

@@ -1,7 +1,7 @@
 {
   "name": "konvert",
   "displayName": "Konvert — English to Code Compiler",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Deterministic English-to-Code compiler — Write English, Ship Code. 0% Hallucinations, <2ms Latency, 100% Offline.",
   "icon": "icon.png",
   "type": "module",
@@ -21,6 +21,7 @@
   },
   "activationEvents": [
     "onStartupFinished",
+    "onCommand:konvert.quickHUD",
     "onCommand:konvert.openLivePreview",
     "onCommand:konvert.convertEnglishToCode",
     "onCommand:konvert.downloadModel"
@@ -28,9 +29,14 @@
   "contributes": {
     "commands": [
       {
+        "command": "konvert.quickHUD",
+        "title": "Konvert: Quick English-to-Code HUD (Realtime)",
+        "icon": "$(zap)"
+      },
+      {
         "command": "konvert.openLivePreview",
         "title": "Konvert: Open Live Compiler Preview",
-        "icon": "$(zap)"
+        "icon": "$(layout-sidebar-right)"
       },
       {
         "command": "konvert.convertEnglishToCode",
@@ -45,14 +51,21 @@
     ],
     "keybindings": [
       {
-        "command": "konvert.openLivePreview",
+        "command": "konvert.quickHUD",
         "key": "ctrl+alt+k",
-        "mac": "cmd+alt+k"
+        "mac": "cmd+alt+k",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "konvert.quickHUD",
+        "key": "alt+k",
+        "mac": "alt+k",
+        "when": "editorTextFocus"
       },
       {
         "command": "konvert.openLivePreview",
-        "key": "ctrl+alt+e",
-        "mac": "cmd+alt+e"
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l"
       }
     ]
   },
