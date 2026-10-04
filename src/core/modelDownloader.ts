@@ -13,7 +13,7 @@ export interface DownloadProgress {
 export class ModelDownloader {
   public static DEFAULT_MODEL_URL =
     process.env.KONVERT_MODEL_URL ||
-    'https://github.com/konvert/konvert/releases/download/v0.1.0/intentengine_model.zip';
+    'https://github.com/abneeshsingh21/konvert/releases/download/v0.1.0/intentengine_model.zip';
 
   /**
    * Resolves the authoritative storage path for Konvert model weights.
