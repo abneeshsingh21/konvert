@@ -26,6 +26,8 @@ export class CNLParser extends CstParser {
             { ALT: () => this.SUBRULE(this.assignment) },
             { ALT: () => this.SUBRULE(this.functionDecl) },
             { ALT: () => this.SUBRULE(this.classDecl) },
+            { ALT: () => this.SUBRULE(this.enumDecl) },
+            { ALT: () => this.SUBRULE(this.interfaceDecl) },
             { ALT: () => this.SUBRULE(this.ifStatement) },
             { ALT: () => this.SUBRULE(this.forLoop) },
             { ALT: () => this.SUBRULE(this.forEach) },
@@ -66,10 +68,13 @@ export class CNLParser extends CstParser {
 
     public functionDecl = this.RULE("functionDecl", () => {
         this.CONSUME(T.DEFINE);
+        this.OPTION(() => {
+            this.CONSUME(T.ASYNC);
+        });
         this.CONSUME(T.FUNCTION);
         this.CONSUME(T.Identifier);
         this.CONSUME(T.LPAREN);
-        this.OPTION(() => {
+        this.OPTION2(() => {
             this.SUBRULE(this.paramList);
         });
         this.CONSUME(T.RPAREN);
@@ -81,6 +86,44 @@ export class CNLParser extends CstParser {
         });
         this.CONSUME(T.END);
         this.CONSUME2(T.FUNCTION);
+    });
+
+    public enumDecl = this.RULE("enumDecl", () => {
+        this.CONSUME(T.DEFINE);
+        this.CONSUME(T.ENUM);
+        this.CONSUME(T.Identifier);
+        this.CONSUME(T.COLON);
+        this.CONSUME2(T.Identifier);
+        this.MANY(() => {
+            this.CONSUME(T.COMMA);
+            this.CONSUME3(T.Identifier);
+        });
+        this.CONSUME(T.END);
+        this.CONSUME2(T.ENUM);
+    });
+
+    public interfaceDecl = this.RULE("interfaceDecl", () => {
+        this.CONSUME(T.DEFINE);
+        this.CONSUME(T.INTERFACE);
+        this.CONSUME(T.Identifier);
+        this.CONSUME(T.COLON);
+        this.MANY(() => {
+            this.SUBRULE(this.interfaceMethodDecl);
+        });
+        this.CONSUME(T.END);
+        this.CONSUME2(T.INTERFACE);
+    });
+
+    public interfaceMethodDecl = this.RULE("interfaceMethodDecl", () => {
+        this.CONSUME(T.FUNCTION);
+        this.CONSUME(T.Identifier);
+        this.CONSUME(T.LPAREN);
+        this.OPTION(() => {
+            this.SUBRULE(this.paramList);
+        });
+        this.CONSUME(T.RPAREN);
+        this.CONSUME(T.ARROW);
+        this.SUBRULE(this.typeRef);
     });
 
     public paramList = this.RULE("paramList", () => {
@@ -411,6 +454,12 @@ export class CNLParser extends CstParser {
                     this.SUBRULE(this.unaryExpr);
                 }
             },
+            {
+                ALT: () => {
+                    this.CONSUME(T.AWAIT);
+                    this.SUBRULE2(this.unaryExpr);
+                }
+            },
             { ALT: () => this.SUBRULE(this.primaryExpr) }
         ]);
     });
@@ -612,7 +661,45 @@ export class CNLToASTVisitor extends BaseVisitor {
             name: ctx.Identifier[0].image,
             params: ctx.paramList ? this.visit(ctx.paramList[0]) : [],
             returnType: this.visit(ctx.typeRef[0]),
-            body: ctx.statement ? ctx.statement.map((s: any) => this.visit(s)) : []
+            body: ctx.statement ? ctx.statement.map((s: any) => this.visit(s)) : [],
+            isAsync: !!ctx.ASYNC
+        };
+    }
+
+    enumDecl(ctx: any): ast.EnumDeclNode {
+        const members: string[] = [];
+        if (ctx.Identifier && ctx.Identifier.length > 1) {
+            for (let i = 1; i < ctx.Identifier.length; i++) {
+                members.push(ctx.Identifier[i].image);
+            }
+        }
+        return {
+            type: 'EnumDecl',
+            line: ctx.DEFINE[0].startLine || 1,
+            col: ctx.DEFINE[0].startColumn || 1,
+            name: ctx.Identifier[0].image,
+            members
+        };
+    }
+
+    interfaceDecl(ctx: any): ast.InterfaceDeclNode {
+        return {
+            type: 'InterfaceDecl',
+            line: ctx.DEFINE[0].startLine || 1,
+            col: ctx.DEFINE[0].startColumn || 1,
+            name: ctx.Identifier[0].image,
+            methods: ctx.interfaceMethodDecl ? ctx.interfaceMethodDecl.map((m: any) => this.visit(m)) : []
+        };
+    }
+
+    interfaceMethodDecl(ctx: any): ast.InterfaceMethodNode {
+        return {
+            type: 'InterfaceMethod',
+            line: ctx.FUNCTION[0].startLine || 1,
+            col: ctx.FUNCTION[0].startColumn || 1,
+            name: ctx.Identifier[0].image,
+            params: ctx.paramList ? this.visit(ctx.paramList[0]) : [],
+            returnType: this.visit(ctx.typeRef[0])
         };
     }
 
@@ -997,6 +1084,14 @@ export class CNLToASTVisitor extends BaseVisitor {
                 operator: '-',
                 operand: this.visit(ctx.unaryExpr[0])
             } as ast.UnaryExprNode;
+        }
+        if (ctx.AWAIT) {
+            return {
+                type: 'AwaitExpr',
+                line: ctx.AWAIT[0].startLine || 1,
+                col: ctx.AWAIT[0].startColumn || 1,
+                expr: this.visit(ctx.unaryExpr[0])
+            } as ast.AwaitExprNode;
         }
         return this.visit(ctx.primaryExpr[0]);
     }

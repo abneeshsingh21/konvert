@@ -25,6 +25,8 @@ export class PythonEmitter {
             case 'Assignment': return this.visitAssignment(node);
             case 'FunctionDecl': return this.visitFunctionDecl(node);
             case 'ClassDecl': return this.visitClassDecl(node);
+            case 'EnumDecl': return this.visitEnumDecl(node);
+            case 'InterfaceDecl': return this.visitInterfaceDecl(node);
             case 'If': return this.visitIf(node);
             case 'ForLoop': return this.visitForLoop(node);
             case 'ForEach': return this.visitForEach(node);
@@ -49,7 +51,7 @@ export class PythonEmitter {
     }
 
     private isExpression(node: any): boolean {
-        return ['BinaryExpr', 'UnaryExpr', 'Literal', 'Identifier', 'FunctionCall', 'MethodCall', 'ListLiteral', 'MapLiteral', 'Lambda', 'Ternary', 'Cast', 'NewObject', 'MemberAccess'].includes(node.type);
+        return ['BinaryExpr', 'UnaryExpr', 'Literal', 'Identifier', 'FunctionCall', 'MethodCall', 'ListLiteral', 'MapLiteral', 'Lambda', 'Ternary', 'Cast', 'NewObject', 'MemberAccess', 'AwaitExpr'].includes(node.type);
     }
 
     private visitVariableDecl(node: ast.VariableDeclNode): string {
@@ -65,10 +67,49 @@ export class PythonEmitter {
         return `${this.indent()}${node.name} = ${this.visitExpression(node.value)}`;
     }
 
+    private visitEnumDecl(node: ast.EnumDeclNode): string {
+        let code = `${this.indent()}from enum import Enum\n`;
+        code += `${this.indent()}class ${node.name}(Enum):\n`;
+        this.indentLevel++;
+        if (node.members.length === 0) {
+            code += `${this.indent()}pass\n`;
+        } else {
+            for (const m of node.members) {
+                code += `${this.indent()}${m} = "${m}"\n`;
+            }
+        }
+        this.indentLevel--;
+        return code;
+    }
+
+    private visitInterfaceDecl(node: ast.InterfaceDeclNode): string {
+        let code = `${this.indent()}from abc import ABC, abstractmethod\n`;
+        code += `${this.indent()}class ${node.name}(ABC):\n`;
+        this.indentLevel++;
+        if (node.methods.length === 0) {
+            code += `${this.indent()}pass\n`;
+        } else {
+            for (const m of node.methods) {
+                const paramStrs = ['self'];
+                for (const p of m.params) {
+                    paramStrs.push(`${p.name}: ${this.mapType(p.paramType)}`);
+                }
+                code += `${this.indent()}@abstractmethod\n`;
+                code += `${this.indent()}def ${m.name}(${paramStrs.join(', ')}) -> ${this.mapType(m.returnType)}:\n`;
+                this.indentLevel++;
+                code += `${this.indent()}pass\n`;
+                this.indentLevel--;
+            }
+        }
+        this.indentLevel--;
+        return code;
+    }
+
     private visitFunctionDecl(node: ast.FunctionDeclNode): string {
         const params = node.params.map((p: ast.ParamNode) => `${p.name}: ${this.mapType(p.paramType)}`).join(', ');
         const retType = this.mapType(node.returnType);
-        let code = `${this.indent()}def ${node.name}(${params}) -> ${retType}:\n`;
+        const defKw = node.isAsync ? 'async def' : 'def';
+        let code = `${this.indent()}${defKw} ${node.name}(${params}) -> ${retType}:\n`;
         this.indentLevel++;
         if (node.body.length === 0) {
             code += `${this.indent()}pass\n`;
@@ -80,6 +121,9 @@ export class PythonEmitter {
         this.indentLevel--;
         return code;
     }
+
+    private currentClassFields: Set<string> | null = null;
+    private currentMethodParams: Set<string> | null = null;
 
     private visitClassDecl(node: ast.ClassDeclNode): string {
         let code = '';
@@ -94,16 +138,36 @@ export class PythonEmitter {
         if (node.fields.length === 0 && node.methods.length === 0) {
             code += `${this.indent()}pass\n`;
         } else {
+            this.currentClassFields = new Set(node.fields.map(f => f.name));
             for (const field of node.fields) {
-                code += `${this.indent()}${field.name}: ${this.mapType(field.fieldType)}\n`;
+                const defVal = field.defaultValue ? ` = ${this.visitExpression(field.defaultValue)}` : '';
+                code += `${this.indent()}${field.name}: ${this.mapType(field.fieldType)}${defVal}\n`;
+            }
+            if (node.fields.length > 0 && node.methods.length > 0) {
+                code += '\n';
             }
             for (const method of node.methods) {
-                // In Python methods need 'self' as first param, let's just emit as is for now
-                // or prefix self if needed. Simplification: just generate standard def
-                code += this.visitFunctionDecl(method) + '\n';
+                code += this.visitClassMethodDecl(method) + '\n';
             }
+            this.currentClassFields = null;
         }
         this.indentLevel--;
+        return code;
+    }
+
+    private visitClassMethodDecl(node: ast.FunctionDeclNode): string {
+        this.currentMethodParams = new Set(node.params.map(p => p.name));
+        const paramStrs = ['self'];
+        for (const p of node.params) {
+            paramStrs.push(`${p.name}: ${this.mapType(p.paramType)}`);
+        }
+        const params = paramStrs.join(', ');
+        const retType = this.mapType(node.returnType);
+        let code = `${this.indent()}def ${node.name}(${params}) -> ${retType}:\n`;
+        this.indentLevel++;
+        code += this.emitBlock(node.body);
+        this.indentLevel--;
+        this.currentMethodParams = null;
         return code;
     }
 
@@ -260,7 +324,11 @@ export class PythonEmitter {
             case 'BinaryExpr': return this.visitBinaryExpr(node);
             case 'UnaryExpr': return this.visitUnaryExpr(node);
             case 'Literal': return this.visitLiteral(node);
-            case 'Identifier': return node.name;
+            case 'Identifier':
+                if (this.currentClassFields && this.currentClassFields.has(node.name) && (!this.currentMethodParams || !this.currentMethodParams.has(node.name))) {
+                    return `self.${node.name}`;
+                }
+                return node.name;
             case 'FunctionCall': return this.visitFunctionCall(node);
             case 'MethodCall': return this.visitMethodCall(node);
             case 'ListLiteral': return this.visitListLiteral(node);
@@ -270,6 +338,7 @@ export class PythonEmitter {
             case 'Cast': return this.visitCast(node);
             case 'NewObject': return this.visitNewObject(node);
             case 'MemberAccess': return this.visitMemberAccess(node);
+            case 'AwaitExpr': return `await ${this.visitExpression(node.expr)}`;
             default: return `/* unknown expr */`;
         }
     }

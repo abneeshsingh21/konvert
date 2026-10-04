@@ -29,6 +29,26 @@ export interface FunctionDeclNode extends ASTNode {
     params: ParamNode[];
     returnType: TypeNode;
     body: StatementNode[];
+    isAsync?: boolean;
+}
+
+export interface EnumDeclNode extends ASTNode {
+    type: 'EnumDecl';
+    name: string;
+    members: string[];
+}
+
+export interface InterfaceMethodNode extends ASTNode {
+    type: 'InterfaceMethod';
+    name: string;
+    params: ParamNode[];
+    returnType: TypeNode;
+}
+
+export interface InterfaceDeclNode extends ASTNode {
+    type: 'InterfaceDecl';
+    name: string;
+    methods: InterfaceMethodNode[];
 }
 
 export interface ClassDeclNode extends ASTNode {
@@ -250,11 +270,18 @@ export interface SymbolEntry {
     declaredAtLine: number;
 }
 
+export interface AwaitExprNode extends ASTNode {
+    type: 'AwaitExpr';
+    expr: ExpressionNode;
+}
+
 export type StatementNode = 
     | VariableDeclNode
     | AssignmentNode
     | FunctionDeclNode
     | ClassDeclNode
+    | EnumDeclNode
+    | InterfaceDeclNode
     | IfNode
     | ForLoopNode
     | ForEachNode
@@ -286,7 +313,8 @@ export type ExpressionNode =
     | TernaryNode
     | CastNode
     | NewObjectNode
-    | MemberAccessNode;
+    | MemberAccessNode
+    | AwaitExprNode;
 
 export interface DiagnosticError {
     message: string;

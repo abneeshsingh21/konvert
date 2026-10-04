@@ -93,6 +93,10 @@ export const DESC = createKeywordToken('DESC', /DESC/);
 export const PYTHON = createKeywordToken('PYTHON', /PYTHON/);
 export const JAVA = createKeywordToken('JAVA', /JAVA/);
 export const CPP = createKeywordToken('CPP', /CPP/);
+export const INTERFACE = createKeywordToken('INTERFACE', /INTERFACE/);
+export const ENUM = createKeywordToken('ENUM', /ENUM/);
+export const ASYNC = createKeywordToken('ASYNC', /ASYNC/);
+export const AWAIT = createKeywordToken('AWAIT', /AWAIT/);
 export const VOID = createKeywordToken('VOID', /VOID/);
 
 // Type Keywords
@@ -193,6 +197,7 @@ export const allTokens = [
     // (e.g., IMPLEMENTS before IN, INSTANCE before IN, ASSERT before AS, etc.)
     IMPLEMENTS,
     SUBSTRING,
+    INTERFACE,
     FUNCTION,
     INSTANCE,
     REVERSE,
@@ -262,6 +267,7 @@ export const allTokens = [
     ELSE,
     DESC,
     MESSAGE,
+    ENUM,
     END,
     SET,
     FOR,
@@ -275,6 +281,8 @@ export const allTokens = [
     ZIP,
     TRY,
     NEW,
+    ASYNC,
+    AWAIT,
     AS,
     IN,
     IF,

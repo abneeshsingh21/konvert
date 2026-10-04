@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { parseCNL, compileToPython, compileToJava, compileToCpp, compileAll } from './compiler/index.js';
 import { ContextBuilder } from './core/contextBuilder.js';
+import { ModelNormalizer } from './core/modelNormalizer.js';
 import { spawn } from 'child_process';
 import * as path from 'path';
 
@@ -197,30 +198,36 @@ export function deactivate() {
   if (statusBarItem) {
     statusBarItem.dispose();
   }
+  ModelNormalizer.getInstance().stop();
 }
 
-function normalizeEnglishWithModel(prompt: string, extensionPath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const scriptPath = path.join(extensionPath, 'scripts', 'infer_cnl.py');
-    const proc = spawn('python', [scriptPath, prompt]);
+async function normalizeEnglishWithModel(prompt: string, extensionPath: string): Promise<string> {
+  const normalizer = ModelNormalizer.getInstance(extensionPath);
+  try {
+    return await normalizer.normalize(prompt, 5000);
+  } catch {
+    // Graceful fallback to standalone script if daemon failed
+    return new Promise((resolve, reject) => {
+      const scriptPath = path.join(extensionPath, 'scripts', 'infer_cnl.py');
+      const proc = spawn('python', [scriptPath, prompt]);
 
-    let stdout = '';
-    let stderr = '';
+      let stdout = '';
+      let stderr = '';
 
-    proc.stdout.on('data', (d) => { stdout += d.toString(); });
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+      proc.stdout.on('data', (d) => { stdout += d.toString(); });
+      proc.stderr.on('data', (d) => { stderr += d.toString(); });
 
-    proc.on('close', (code) => {
-      if (code === 0) {
-        // Find last non-empty line of output (skips huggingface warnings/logs)
-        const lines = stdout.trim().split('\n').map((l) => l.trim()).filter(Boolean);
-        const lastLine = lines[lines.length - 1] || '';
-        resolve(lastLine);
-      } else {
-        reject(new Error(stderr || `Exited with code ${code}`));
-      }
+      proc.on('close', (code) => {
+        if (code === 0) {
+          const lines = stdout.trim().split('\n').map((l) => l.trim()).filter(Boolean);
+          const lastLine = lines[lines.length - 1] || '';
+          resolve(lastLine);
+        } else {
+          reject(new Error(stderr || `Exited with code ${code}`));
+        }
+      });
     });
-  });
+  }
 }
 
 function getWebviewContent(): string {

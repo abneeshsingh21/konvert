@@ -8,7 +8,7 @@ export class CppEmitter {
   }
 
   public emit(program: ast.ProgramNode): string {
-    let code = '#include <iostream>\n#include <vector>\n#include <string>\n#include <algorithm>\n#include <ranges>\n\n';
+    let code = '#include <iostream>\n#include <vector>\n#include <string>\n#include <algorithm>\n#include <ranges>\n#include <map>\n#include <memory>\n#include <future>\n\n';
 
     for (const stmt of program.body) {
       code += this.visitStatement(stmt) + '\n';
@@ -27,6 +27,10 @@ export class CppEmitter {
         return this.visitFunctionDecl(node);
       case 'ClassDecl':
         return this.visitClassDecl(node);
+      case 'EnumDecl':
+        return this.visitEnumDecl(node);
+      case 'InterfaceDecl':
+        return this.visitInterfaceDecl(node);
       case 'If':
         return this.visitIf(node);
       case 'ForLoop':
@@ -67,11 +71,34 @@ export class CppEmitter {
     return `${this.indent()}${node.name} = ${this.visitExpression(node.value)};`;
   }
 
+  private visitEnumDecl(node: ast.EnumDeclNode): string {
+    const members = node.members.join(', ');
+    return `${this.indent()}enum class ${node.name} { ${members} };`;
+  }
+
+  private visitInterfaceDecl(node: ast.InterfaceDeclNode): string {
+    let code = `${this.indent()}struct ${node.name} {\n`;
+    this.indentLevel++;
+    code += `${this.indent()}virtual ~${node.name}() = default;\n`;
+    for (const m of node.methods) {
+      const params = m.params
+        .map((p: ast.ParamNode) => `${this.mapType(p.paramType)} ${p.name}`)
+        .join(', ');
+      code += `${this.indent()}virtual ${this.mapType(m.returnType)} ${m.name}(${params}) = 0;\n`;
+    }
+    this.indentLevel--;
+    code += `${this.indent()}};`;
+    return code;
+  }
+
   private visitFunctionDecl(node: ast.FunctionDeclNode): string {
     const params = node.params
       .map((p: ast.ParamNode) => `${this.mapType(p.paramType)} ${p.name}`)
       .join(', ');
-    const retType = this.mapType(node.returnType);
+    let retType = this.mapType(node.returnType);
+    if (node.isAsync) {
+      retType = `std::future<${retType}>`;
+    }
     let code = `${this.indent()}${retType} ${node.name}(${params}) {\n`;
     this.indentLevel++;
     for (const stmt of node.body) {
@@ -83,11 +110,30 @@ export class CppEmitter {
   }
 
   private visitClassDecl(node: ast.ClassDeclNode): string {
-    let code = `${this.indent()}struct ${node.name} {\n`;
+    let inheritance = '';
+    const bases: string[] = [];
+    if (node.extends) bases.push(`public ${node.extends}`);
+    if (node.implements) {
+      for (const iface of node.implements) bases.push(`public ${iface}`);
+    }
+    if (bases.length > 0) {
+      inheritance = ` : ${bases.join(', ')}`;
+    }
+
+    let code = `${this.indent()}struct ${node.name}${inheritance} {\n`;
     this.indentLevel++;
     for (const f of node.fields) {
-      code += `${this.indent()}${this.mapType(f.fieldType)} ${f.name};\n`;
+      const defVal = f.defaultValue ? ` = ${this.visitExpression(f.defaultValue)}` : '';
+      code += `${this.indent()}${this.mapType(f.fieldType)} ${f.name}${defVal};\n`;
     }
+
+    if (node.methods && node.methods.length > 0) {
+      code += '\n';
+      for (const m of node.methods) {
+        code += this.visitFunctionDecl(m) + '\n';
+      }
+    }
+
     this.indentLevel--;
     code += `${this.indent()}};`;
     return code;
@@ -228,9 +274,45 @@ export class CppEmitter {
         const args = node.args.map((a: ast.ExpressionNode) => this.visitExpression(a)).join(', ');
         return `${node.name}(${args})`;
       }
+      case 'MethodCall': {
+        const target = this.visitExpression(node.target);
+        const args = node.args.map((a: ast.ExpressionNode) => this.visitExpression(a)).join(', ');
+        return `${target}.${node.methodName}(${args})`;
+      }
+      case 'MemberAccess': {
+        return `${this.visitExpression(node.target)}.${node.member}`;
+      }
+      case 'NewObject': {
+        const args = node.args.map((a: ast.ExpressionNode) => this.visitExpression(a)).join(', ');
+        return `${node.className}{${args}}`;
+      }
       case 'ListLiteral': {
         const items = node.elements.map((e: ast.ExpressionNode) => this.visitExpression(e)).join(', ');
         return `{${items}}`;
+      }
+      case 'MapLiteral': {
+        const entries = node.entries
+          .map((e: { key: ast.ExpressionNode; value: ast.ExpressionNode }) =>
+            `{${this.visitExpression(e.key)}, ${this.visitExpression(e.value)}}`
+          )
+          .join(', ');
+        return `{${entries}}`;
+      }
+      case 'Lambda': {
+        const params = node.params.map((p: ast.ParamNode) => `const auto& ${p.name}`).join(', ');
+        if (!Array.isArray(node.body)) {
+          return `[&](${params}) { return ${this.visitExpression(node.body)}; }`;
+        }
+        return `[&](${params}) {}`;
+      }
+      case 'Ternary': {
+        return `(${this.visitExpression(node.condition)} ? ${this.visitExpression(node.trueExpr)} : ${this.visitExpression(node.falseExpr)})`;
+      }
+      case 'Cast': {
+        return `static_cast<${this.mapType(node.targetType)}>(${this.visitExpression(node.expr)})`;
+      }
+      case 'AwaitExpr': {
+        return `${this.visitExpression(node.expr)}.get()`;
       }
       default:
         return 'nullptr';
@@ -238,7 +320,8 @@ export class CppEmitter {
   }
 
   private mapType(t: ast.TypeNode): string {
-    switch (t.name) {
+    const typeName = t.name || t.kind;
+    switch (typeName) {
       case 'Int':
         return 'int';
       case 'Float':
@@ -253,8 +336,17 @@ export class CppEmitter {
         const inner = t.typeArgs && t.typeArgs[0] ? this.mapType(t.typeArgs[0]) : 'auto';
         return `std::vector<${inner}>`;
       }
+      case 'Set': {
+        const inner = t.typeArgs && t.typeArgs[0] ? this.mapType(t.typeArgs[0]) : 'auto';
+        return `std::set<${inner}>`;
+      }
+      case 'Map': {
+        const keyType = t.typeArgs && t.typeArgs[0] ? this.mapType(t.typeArgs[0]) : 'std::string';
+        const valType = t.typeArgs && t.typeArgs[1] ? this.mapType(t.typeArgs[1]) : 'auto';
+        return `std::map<${keyType}, ${valType}>`;
+      }
       default:
-        return t.name || 'auto';
+        return typeName || 'auto';
     }
   }
 }
