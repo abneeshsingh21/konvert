@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { parseCNL, compileToPython, compileToJava, compileToCpp, compileAll } from './compiler/index.js';
 import { ContextBuilder } from './core/contextBuilder.js';
 import { ModelNormalizer } from './core/modelNormalizer.js';
+import { ModelDownloader } from './core/modelDownloader.js';
 import { spawn } from 'child_process';
 import * as path from 'path';
 
@@ -10,6 +11,76 @@ let statusBarItem: vscode.StatusBarItem;
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('Konvert Extension is now active!');
+
+  // Helper: Download compressed model on install
+  async function ensureModelDownloaded(interactive: boolean = false): Promise<boolean> {
+    const targetDir = ModelDownloader.getTargetModelDir(context.globalStorageUri.fsPath);
+    if (ModelDownloader.isModelInstalled(targetDir) || ModelDownloader.isModelInstalled(path.join(context.extensionPath, 'models'))) {
+      return true;
+    }
+
+    if (!interactive) {
+      const choice = await vscode.window.showInformationMessage(
+        '⚡ Konvert: Initializing Neural Engine. Would you like to download the compressed language model for casual English normalization?',
+        'Download Now',
+        'Later'
+      );
+      if (choice !== 'Download Now') {
+        return false;
+      }
+    }
+
+    return await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'Konvert: Downloading AI Language Engine',
+        cancellable: true,
+      },
+      async (progress, token) => {
+        const abortController = new AbortController();
+        token.onCancellationRequested(() => {
+          abortController.abort();
+        });
+
+        try {
+          statusBarItem.text = '$(sync~spin) Downloading AI Model...';
+          await ModelDownloader.downloadAndExtractModel({
+            targetDir,
+            abortSignal: abortController.signal,
+            onProgress: (p) => {
+              const mbDownloaded = (p.downloadedBytes / (1024 * 1024)).toFixed(1);
+              const mbTotal = (p.totalBytes / (1024 * 1024)).toFixed(1);
+              progress.report({
+                message: `${mbDownloaded}MB / ${mbTotal}MB (${p.percent}%)`,
+                increment: 1,
+              });
+            },
+          });
+          vscode.window.showInformationMessage('✨ Konvert: AI Language Engine installed successfully!');
+          statusBarItem.text = '$(zap) Konvert: Ready (AI Engine Online)';
+          return true;
+        } catch (err: any) {
+          if (token.isCancellationRequested) {
+            vscode.window.showWarningMessage('Konvert: AI Model download canceled.');
+          } else {
+            vscode.window.showErrorMessage(`Konvert: Failed to download model: ${err.message}`);
+          }
+          statusBarItem.text = '$(zap) Konvert: Ready';
+          return false;
+        }
+      }
+    );
+  }
+
+  // Check and trigger download asynchronously on install
+  setTimeout(() => {
+    ensureModelDownloaded(false);
+  }, 1000);
+
+  // Command to manually trigger model download
+  context.subscriptions.push(
+    vscode.commands.registerCommand('konvert.downloadModel', () => ensureModelDownloaded(true))
+  );
 
   // 1. Status Bar Item
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -133,6 +204,17 @@ export function activate(context: vscode.ExtensionContext) {
           });
         } else if (message.command === 'normalize') {
           try {
+            const normalizer = ModelNormalizer.getInstance(context.extensionPath);
+            if (!normalizer.isModelAvailable()) {
+              const downloaded = await ensureModelDownloaded(true);
+              if (!downloaded) {
+                panel.webview.postMessage({
+                  command: 'normalizeError',
+                  error: 'AI Model not downloaded. Please download the model to enable casual English normalization.',
+                });
+                return;
+              }
+            }
             const cnl = await normalizeEnglishWithModel(message.text, context.extensionPath);
             panel.webview.postMessage({
               command: 'setNormalizedCNL',

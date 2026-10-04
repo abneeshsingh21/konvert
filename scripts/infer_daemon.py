@@ -17,7 +17,7 @@ hf_logging.disable_progress_bar()
 import torch
 torch.set_num_threads(4)
 
-MODEL_DIR = Path(__file__).resolve().parent.parent / "models"
+MODEL_DIR = Path(os.environ.get("KONVERT_MODEL_DIR", str(Path(__file__).resolve().parent.parent / "models")))
 
 try:
     tokenizer = AutoTokenizer.from_pretrained(str(MODEL_DIR))

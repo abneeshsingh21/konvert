@@ -31,6 +31,11 @@
         "command": "konvert.convertEnglishToCode",
         "title": "Konvert: Convert English to Code (Prompt)",
         "icon": "$(edit)"
+      },
+      {
+        "command": "konvert.downloadModel",
+        "title": "Konvert: Download AI Language Engine (Instant)",
+        "icon": "$(cloud-download)"
       }
     ],
     "keybindings": [

@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { ModelDownloader } from './modelDownloader.js';
 
 export interface NormalizerResponse {
   id: number;
@@ -28,9 +29,21 @@ export class ModelNormalizer {
     return ModelNormalizer.instance;
   }
 
+  public getModelDir(): string {
+    const localDir = path.join(this.baseDir, 'models');
+    if (ModelDownloader.isModelInstalled(localDir)) {
+      return localDir;
+    }
+    const targetDir = ModelDownloader.getTargetModelDir(this.baseDir);
+    if (ModelDownloader.isModelInstalled(targetDir)) {
+      return targetDir;
+    }
+    return localDir;
+  }
+
   public isModelAvailable(): boolean {
-    const modelDir = path.join(this.baseDir, 'models');
-    return fs.existsSync(modelDir) && fs.existsSync(path.join(modelDir, 'model.safetensors'));
+    const dir = this.getModelDir();
+    return ModelDownloader.isModelInstalled(dir);
   }
 
   public start(): Promise<boolean> {
@@ -50,7 +63,11 @@ export class ModelNormalizer {
       }
 
       this.process = spawn('python', [scriptPath], {
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          KONVERT_MODEL_DIR: this.getModelDir()
+        }
       });
 
       this.process.stdout?.on('data', (data: Buffer) => {
@@ -104,12 +121,12 @@ export class ModelNormalizer {
         this.pendingRequests.clear();
       });
 
-      // Timeout fallback if daemon doesn't start in 15 seconds
+      // Timeout fallback if daemon doesn't start in 30 seconds
       setTimeout(() => {
         if (!this.isReady) {
           resolve(false);
         }
-      }, 15000);
+      }, 30000);
     });
   }
 

@@ -7,8 +7,8 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 prompt = " ".join(sys.argv[1:])
-
-MODEL_DIR = Path(__file__).resolve().parent.parent / "models"
+import os
+MODEL_DIR = Path(os.environ.get("KONVERT_MODEL_DIR", str(Path(__file__).resolve().parent.parent / "models")))
 
 tokenizer = AutoTokenizer.from_pretrained(str(MODEL_DIR))
 model = AutoModelForSeq2SeqLM.from_pretrained(str(MODEL_DIR))

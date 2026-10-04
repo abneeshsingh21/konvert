@@ -35,5 +35,5 @@ describe('Konvert Persistent Model Normalization Daemon Suite', () => {
     expect(out2.length).toBeGreaterThan(0);
     // Verified local daemon latency on CPU is much faster than multi-second cold start
     expect(latency).toBeLessThan(2500);
-  }, 20000);
+  }, 40000);
 });

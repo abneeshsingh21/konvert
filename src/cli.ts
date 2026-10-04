@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import * as path from 'path';
 import { parseCNL, compileToPython, compileToJava, compileToCpp, compileAll, ProjectCompiler } from './compiler/index.js';
+import { ModelDownloader } from './core/modelDownloader.js';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -148,6 +149,40 @@ else if (command === 'compile') {
   }
 }
 
+// 6. Command: model (Download and status management)
+else if (command === 'model') {
+  const sub = remainingArgs[0] || 'download';
+  const targetDir = ModelDownloader.getTargetModelDir();
+
+  if (sub === 'status') {
+    const installed = ModelDownloader.isModelInstalled(targetDir);
+    console.log(`🧠 Konvert Model Directory: ${targetDir}`);
+    console.log(`Status: ${installed ? '✅ Installed & Ready' : '❌ Not Installed'}`);
+    process.exit(0);
+  }
+
+  console.log(`⚡ Downloading Konvert compressed AI model to ${targetDir}...`);
+  try {
+    let lastPercent = -1;
+    await ModelDownloader.downloadAndExtractModel({
+      targetDir,
+      onProgress: (p) => {
+        if (p.percent !== lastPercent && p.percent % 10 === 0) {
+          lastPercent = p.percent;
+          const mbDown = (p.downloadedBytes / (1024 * 1024)).toFixed(1);
+          const mbTot = (p.totalBytes / (1024 * 1024)).toFixed(1);
+          process.stdout.write(`\r  Progress: ${mbDown}MB / ${mbTot}MB (${p.percent}%)`);
+        }
+      }
+    });
+    console.log(`\n✨ Model downloaded and extracted successfully! Ready for offline inference.`);
+    process.exit(0);
+  } catch (err: any) {
+    console.error(`\n❌ Download failed: ${err.message}`);
+    process.exit(1);
+  }
+}
+
 // Usage Help
 else {
   console.log(`
@@ -159,6 +194,7 @@ Commands:
   konvert check                        Check all project files for syntax errors
   konvert compile "<code>"             Compile single English/CNL snippet
   konvert validate "<code>"            Validate syntax of a snippet
+  konvert model [download|status]      Download or check local AI model weights
 
 Options:
   --lang=python|java|cpp|all           Target language (default: python)

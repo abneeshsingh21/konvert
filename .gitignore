@@ -29,3 +29,5 @@ models/**/checkpoint-*/
 
 demo-app/
 *.vsix
+models/onnx/
+models/onnx_int8/
