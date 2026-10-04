@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import * as path from 'path';
 import { parseCNL, compileToPython, compileToJava, compileToCpp, compileAll, ProjectCompiler } from './compiler/index.js';
 

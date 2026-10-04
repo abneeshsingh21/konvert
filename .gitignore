@@ -28,3 +28,4 @@ models/training_output/
 models/**/checkpoint-*/
 
 demo-app/
+*.vsix
