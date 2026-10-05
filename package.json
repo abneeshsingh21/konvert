@@ -35,7 +35,15 @@
       {
         "id": "english-intent",
         "aliases": ["English Intent", "Konvert", "eng"],
-        "extensions": [".eng", ".knv"]
+        "extensions": [".eng", ".knv", ".cnl", ".intent"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "english-intent",
+        "scopeName": "source.eng",
+        "path": "./syntaxes/eng.tmLanguage.json"
       }
     ],
     "commands": [

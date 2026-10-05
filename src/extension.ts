@@ -110,14 +110,13 @@ export function activate(context: vscode.ExtensionContext) {
   // 1. Status Bar Item
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = '$(zap) Konvert';
-  statusBarItem.tooltip = 'Konvert: English to Code (Ctrl+Alt+K for Realtime HUD)';
+  statusBarItem.tooltip = 'Konvert: English to Code (Ctrl+Alt+K for Realtime HUD • Ctrl+Alt+T for Reactive Twin)';
   statusBarItem.command = 'konvert.quickHUD';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
   // 2. Command: Real-Time Floating Quick-HUD (Popup window right inside the editor)
   const showQuickConvertHUD = () => {
-    // Determine the target editor and language
     const currentEditor = vscode.window.activeTextEditor || lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
     let targetLang = currentEditor ? currentEditor.document.languageId : 'python';
     if (!['python', 'java', 'cpp', 'c'].includes(targetLang)) {
@@ -135,12 +134,17 @@ export function activate(context: vscode.ExtensionContext) {
       tooltip: `Target Language: ${targetLang.toUpperCase()} (Click to change)`,
     };
 
+    const twinBtn: vscode.QuickInputButton = {
+      iconPath: new vscode.ThemeIcon('split-horizontal'),
+      tooltip: 'Open Live Reactive Twin (Continuous Split View)',
+    };
+
     const previewBtn: vscode.QuickInputButton = {
       iconPath: new vscode.ThemeIcon('layout-sidebar-right'),
       tooltip: 'Open Split Live Preview Panel',
     };
 
-    inputBox.buttons = [langBtn, previewBtn];
+    inputBox.buttons = [langBtn, twinBtn, previewBtn];
 
     let currentCompiledCode = '';
     let isSyntaxValid = false;
@@ -194,10 +198,14 @@ export function activate(context: vscode.ExtensionContext) {
               iconPath: new vscode.ThemeIcon('symbol-variable'),
               tooltip: `Target Language: ${targetLang.toUpperCase()} (Click to change)`,
             },
+            twinBtn,
             previewBtn,
           ];
           runLiveCompilation(inputBox.value);
         }
+      } else if (btn === twinBtn) {
+        inputBox.hide();
+        vscode.commands.executeCommand('konvert.openReactiveTwin');
       } else if (btn === previewBtn) {
         inputBox.hide();
         vscode.commands.executeCommand('konvert.openLivePreview');
@@ -224,7 +232,6 @@ export function activate(context: vscode.ExtensionContext) {
 
       inputBox.hide();
 
-      // Find the editor to insert into
       const editor = vscode.window.activeTextEditor || currentEditor || lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
 
       if (editor) {
@@ -255,7 +262,6 @@ export function activate(context: vscode.ExtensionContext) {
         contextBuilder.addStatement(text);
         vscode.window.setStatusBarMessage(`⚡ Konvert: Generated ${targetLang.toUpperCase()} code in <2ms!`, 3000);
       } else {
-        // Fallback: If no editor is open, open a new untitled file with the code
         const doc = await vscode.workspace.openTextDocument({
           content: finalCode,
           language: targetLang,
@@ -292,7 +298,7 @@ export function activate(context: vscode.ExtensionContext) {
   const runLivePreview = () => {
     const panel = vscode.window.createWebviewPanel(
       'konvertLivePreview',
-      'Konvert — Live Compiler',
+      'Konvert — Live Compiler Studio',
       vscode.ViewColumn.Beside,
       { enableScripts: true }
     );
@@ -345,7 +351,6 @@ export function activate(context: vscode.ExtensionContext) {
       } else if (message.command === 'normalize') {
         const rawInput = message.text || '';
 
-        // Step 1: Use deterministic instant normalizer first (sub-millisecond, zero hallucination)
         const normalizedCNL = IntentNormalizer.normalize(rawInput);
         if (normalizedCNL !== rawInput) {
           panel.webview.postMessage({
@@ -355,7 +360,6 @@ export function activate(context: vscode.ExtensionContext) {
           return;
         }
 
-        // Step 2: Check if neural weights are available locally
         const targetDir = ModelDownloader.getTargetModelDir(context.globalStorageUri.fsPath);
         const hasWeights = ModelDownloader.isModelInstalled(targetDir) || ModelDownloader.isModelInstalled(path.join(context.extensionPath, 'models'));
 
@@ -375,7 +379,7 @@ export function activate(context: vscode.ExtensionContext) {
         } else {
           panel.webview.postMessage({
             command: 'normalizeInfo',
-            info: 'Instant normalizer active. Download AI Language Engine from Command Palette for neural models.',
+            info: 'Instant rule normalizer active. Download AI Language Engine from Command Palette for neural models.',
           });
         }
       } else if (message.command === 'insertToEditor') {
@@ -410,7 +414,73 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand('konvert.openLivePreview', runLivePreview));
   context.subscriptions.push(vscode.commands.registerCommand('intentengine.openLivePreview', runLivePreview));
 
-  // 4. Inline Ghost-Text Provider (Triggers on comments like #? or //?)
+  // 5. Rich Hover Provider for English Intent files (.eng, .knv)
+  const hoverDocs: Record<string, string> = {
+    'DEFINE FUNCTION': '### ⚡ Konvert Function Declaration\n\nDeclares a deterministic, type-annotated function.\n\n```english\nDEFINE FUNCTION add(a: Int, b: Int) -> Int:\n  RETURN a + b\nEND FUNCTION\n```\n\n* Compiles to: `def add(a: int, b: int) -> int:` in Python.\n* Emits strict types in Java and C++20.',
+    'DEFINE CLASS': '### ⚡ Konvert Class / Record\n\nDefines a structured data entity.\n\n```english\nDEFINE CLASS User:\n  FIELD name AS String\n  FIELD age AS Int\nEND CLASS\n```\n\n* Emits `@dataclass` in Python 3.12.\n* Emits `record` in Java 21.\n* Emits type-safe `struct` in C++20.',
+    'DECLARE': '### ⚡ Konvert Variable Declaration\n\n```english\nDECLARE count AS Int WITH VALUE 10\n```\nDeclares an immutable or mutable typed variable with optional initialization.',
+    'FILTER': '### ⚡ Konvert Stream Filter\n\n```english\nFILTER users WHERE age >= 18\n```\nCompiles to list comprehensions in Python, Streams in Java, and `std::ranges` in C++20.',
+    'SORT': '### ⚡ Konvert Sort Operation\n\n```english\nSORT items BY price DESC\n```\nPerforms deterministic sorting on collections with 0% hallucinations.',
+    'PRINT': '### ⚡ Konvert Print Statement\n\n```english\nPRINT "Hello World"\n```\nOutputs to standard console across all target runtimes.',
+  };
+
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider('english-intent', {
+      provideHover(document, position) {
+        const lineText = document.lineAt(position.line).text.toUpperCase();
+        for (const [kw, doc] of Object.entries(hoverDocs)) {
+          if (lineText.includes(kw)) {
+            const md = new vscode.MarkdownString(doc);
+            md.isTrusted = true;
+            return new vscode.Hover(md);
+          }
+        }
+        return undefined;
+      },
+    })
+  );
+
+  // 6. Document Symbol Provider for Outline view & Breadcrumbs in .eng files
+  context.subscriptions.push(
+    vscode.languages.registerDocumentSymbolProvider('english-intent', {
+      provideDocumentSymbols(document) {
+        const symbols: vscode.DocumentSymbol[] = [];
+        for (let i = 0; i < document.lineCount; i++) {
+          const line = document.lineAt(i);
+          const text = line.text.trim();
+
+          const fnMatch = text.match(/^(?:DEFINE\s+(?:A\s+)?FUNCTION|def|fn)\s+([a-zA-Z_]\w*)/i);
+          if (fnMatch) {
+            symbols.push(
+              new vscode.DocumentSymbol(
+                fnMatch[1],
+                'Function',
+                vscode.SymbolKind.Function,
+                line.range,
+                line.range
+              )
+            );
+          }
+
+          const classMatch = text.match(/^(?:DEFINE\s+(?:A\s+)?CLASS|class)\s+([a-zA-Z_]\w*)/i);
+          if (classMatch) {
+            symbols.push(
+              new vscode.DocumentSymbol(
+                classMatch[1],
+                'Class Record',
+                vscode.SymbolKind.Class,
+                line.range,
+                line.range
+              )
+            );
+          }
+        }
+        return symbols;
+      },
+    })
+  );
+
+  // 7. Inline Ghost-Text Provider (Triggers on comments like #? or //?)
   const inlineProvider: vscode.InlineCompletionItemProvider = {
     provideInlineCompletionItems(document, position) {
       const lineText = document.lineAt(position.line).text.substring(0, position.character);
@@ -458,7 +528,6 @@ async function normalizeEnglishWithModel(prompt: string, extensionPath: string):
   try {
     return await normalizer.normalize(prompt, 5000);
   } catch {
-    // Graceful fallback to standalone script if daemon failed
     return new Promise((resolve, reject) => {
       const scriptPath = path.join(extensionPath, 'scripts', 'infer_cnl.py');
       const proc = spawn('python', [scriptPath, prompt]);
@@ -488,23 +557,26 @@ function getWebviewContent(logoSrc?: string): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Konvert — Live Compiler</title>
+  <title>Konvert — Live Compiler Studio</title>
   <style>
     :root {
       --bg: var(--vscode-editor-background, #1e1e1e);
       --fg: var(--vscode-editor-foreground, #d4d4d4);
-      --input-bg: var(--vscode-input-background, #252526);
+      --sidebar-bg: var(--vscode-sideBar-background, #252526);
+      --input-bg: var(--vscode-input-background, #1e1e1e);
       --input-border: var(--vscode-input-border, #3c3c3c);
       --accent: var(--vscode-button-background, #007acc);
       --accent-hover: var(--vscode-button-hoverBackground, #0062a3);
       --accent-fg: var(--vscode-button-foreground, #ffffff);
       --panel-border: var(--vscode-panel-border, #2d2d2d);
-      --badge-bg: var(--vscode-badge-background, #4d4d4d);
-      --badge-fg: var(--vscode-badge-foreground, #ffffff);
+      --tab-active-bg: var(--vscode-tab-activeBackground, #1e1e1e);
+      --tab-inactive-bg: var(--vscode-tab-inactiveBackground, #2d2d2d);
+      --line-number: var(--vscode-editorLineNumber-foreground, #858585);
       --error: #f48771;
-      --success: #89d185;
-      --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Courier New', monospace;
+      --success: #4ec9b0;
+      --font-mono: var(--vscode-editor-font-family, 'JetBrains Mono', 'Fira Code', 'Consolas', monospace);
       --font-ui: var(--vscode-font-family, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+      --font-size: var(--vscode-editor-font-size, 13px);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -516,131 +588,333 @@ function getWebviewContent(logoSrc?: string): string {
       height: 100vh;
       display: flex;
       flex-direction: column;
-      padding: 12px 16px;
+      padding: 0;
       overflow: hidden;
       user-select: none;
     }
 
-    /* Top Brand Bar */
-    .top-bar {
+    /* Top Studio Header */
+    .studio-header {
+      background: var(--sidebar-bg);
+      border-bottom: 1px solid var(--panel-border);
+      padding: 8px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--panel-border);
-      margin-bottom: 10px;
+      min-height: 44px;
     }
 
-    .brand {
+    .brand-section {
       display: flex;
       align-items: center;
       gap: 10px;
     }
 
-    .brand-icon {
+    .brand-logo {
       width: 26px;
       height: 26px;
       border-radius: 6px;
-      background: var(--accent);
-      color: var(--accent-fg);
+      object-fit: contain;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 2px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .brand-meta {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 14px;
+      flex-direction: column;
     }
 
     .brand-title {
+      font-size: 13px;
       font-weight: 700;
-      font-size: 14px;
       letter-spacing: -0.2px;
-      color: var(--fg);
-    }
-
-    .brand-tag {
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground, #888);
-      margin-left: 8px;
-    }
-
-    .status-chips {
       display: flex;
       align-items: center;
       gap: 6px;
     }
 
-    .chip {
-      font-size: 10.5px;
-      padding: 3px 8px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: var(--vscode-descriptionForeground, #aaa);
-      font-family: var(--font-mono);
-    }
-
-    .chip-latency {
+    .studio-badge {
+      font-size: 9.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(0, 122, 204, 0.2);
       color: #38bdf8;
-      border-color: rgba(56, 189, 248, 0.25);
+      border: 1px solid rgba(0, 122, 204, 0.4);
     }
 
-    .chip-success {
-      color: var(--success);
-      border-color: rgba(137, 209, 133, 0.25);
-    }
-
-    /* Controls Bar */
-    .toolbar {
+    .telemetry-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 10px;
       gap: 8px;
     }
 
-    .segmented-control {
+    .pill {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 12px;
       display: flex;
-      background: var(--input-bg);
-      border: 1px solid var(--panel-border);
-      border-radius: 6px;
-      padding: 2px;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--vscode-descriptionForeground, #999);
+    }
+
+    .pill-latency {
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.3);
+      background: rgba(56, 189, 248, 0.06);
+    }
+
+    .pulsing-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #38bdf8;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.7; }
+    }
+
+    /* Sub-header / Tabs Bar */
+    .studio-tabs-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--tab-inactive-bg);
+      border-bottom: 1px solid var(--panel-border);
+      padding: 0 10px;
+    }
+
+    .ide-tabs {
+      display: flex;
       gap: 2px;
     }
 
-    .segmented-btn {
+    .ide-tab {
       background: transparent;
       border: none;
-      color: var(--vscode-descriptionForeground, #999);
-      padding: 4px 10px;
-      font-size: 11px;
-      font-weight: 600;
-      border-radius: 4px;
+      border-top: 2px solid transparent;
+      padding: 8px 14px;
+      color: var(--vscode-descriptionForeground, #8c8c8c);
+      font-size: 11.5px;
+      font-weight: 500;
       cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .segmented-btn:hover {
-      color: var(--fg);
-      background: rgba(255, 255, 255, 0.04);
-    }
-
-    .segmented-btn.active {
-      background: var(--accent);
-      color: var(--accent-fg);
-    }
-
-    .tool-actions {
       display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.12s ease;
+    }
+
+    .ide-tab:hover {
+      color: var(--fg);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .ide-tab.active {
+      background: var(--bg);
+      color: var(--fg);
+      border-top-color: var(--accent);
+      font-weight: 600;
+    }
+
+    .tab-actions {
+      display: flex;
+      align-items: center;
       gap: 6px;
     }
 
-    .btn-action {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--panel-border);
-      color: var(--fg);
-      padding: 4px 10px;
-      border-radius: 6px;
+    .action-icon-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--vscode-descriptionForeground, #999);
+      padding: 4px 8px;
+      border-radius: 4px;
       font-size: 11px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.12s ease;
+    }
+
+    .action-icon-btn:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--panel-border);
+      color: var(--fg);
+    }
+
+    /* Quick Snippets Pill Bar */
+    .snippet-tray {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: rgba(0, 0, 0, 0.1);
+      border-bottom: 1px solid var(--panel-border);
+      overflow-x: auto;
+    }
+
+    .snippet-tag {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--vscode-descriptionForeground, #808080);
+      white-space: nowrap;
+    }
+
+    .snippet-chip {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--vscode-descriptionForeground, #b8b8b8);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.12s ease;
+    }
+
+    .snippet-chip:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--accent);
+      color: var(--fg);
+    }
+
+    /* Main Split Workspace */
+    .workspace-split {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      background: var(--bg);
+    }
+
+    .editor-column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      border-right: 1px solid var(--panel-border);
+    }
+
+    .editor-column:last-child {
+      border-right: none;
+    }
+
+    .column-breadcrumbs {
+      background: rgba(0, 0, 0, 0.15);
+      border-bottom: 1px solid var(--panel-border);
+      padding: 5px 12px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--vscode-descriptionForeground, #808080);
+      font-family: var(--font-mono);
+    }
+
+    .editor-body {
+      flex: 1;
+      display: flex;
+      position: relative;
+      min-height: 0;
+      background: var(--input-bg);
+    }
+
+    .line-gutter {
+      width: 42px;
+      padding: 12px 6px 12px 0;
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: var(--font-size);
+      line-height: 1.6;
+      color: var(--line-number);
+      user-select: none;
+      background: rgba(0, 0, 0, 0.05);
+      border-right: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    textarea, pre {
+      flex: 1;
+      padding: 12px 14px;
+      font-family: var(--font-mono);
+      font-size: var(--font-size);
+      line-height: 1.6;
+      background: transparent;
+      color: var(--fg);
+      border: none;
+      outline: none;
+      resize: none;
+      user-select: text;
+      tab-size: 4;
+      white-space: pre;
+      overflow: auto;
+    }
+
+    .error-tray {
+      padding: 6px 12px;
+      background: rgba(244, 135, 113, 0.12);
+      border-top: 1px solid rgba(244, 135, 113, 0.3);
+      color: var(--error);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      max-height: 70px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    /* Footer Status Bar */
+    .studio-footer {
+      background: var(--sidebar-bg);
+      border-top: 1px solid var(--panel-border);
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+
+    .key-hints {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--vscode-descriptionForeground, #777);
+    }
+
+    .kbd {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--fg);
+    }
+
+    .footer-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--fg);
+      border: 1px solid var(--panel-border);
+      padding: 5px 12px;
+      border-radius: 4px;
+      font-size: 11.5px;
       font-weight: 500;
       cursor: pointer;
       display: flex;
@@ -649,203 +923,17 @@ function getWebviewContent(logoSrc?: string): string {
       transition: all 0.15s ease;
     }
 
-    .btn-action:hover {
+    .btn-secondary:hover {
       background: rgba(255, 255, 255, 0.1);
       border-color: rgba(255, 255, 255, 0.2);
-    }
-
-    .btn-action:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    /* Template Snippets Pills */
-    .snippets-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 10px;
-      overflow-x: auto;
-      padding-bottom: 2px;
-    }
-
-    .snippet-label {
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--vscode-descriptionForeground, #808080);
-      margin-right: 4px;
-      white-space: nowrap;
-    }
-
-    .snippet-pill {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: var(--vscode-descriptionForeground, #b0b0b0);
-      padding: 2px 9px;
-      border-radius: 10px;
-      font-size: 10.5px;
-      font-family: var(--font-mono);
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.12s ease;
-    }
-
-    .snippet-pill:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--fg);
-      border-color: var(--accent);
-    }
-
-    /* Split Panes */
-    .panes-container {
-      display: flex;
-      flex: 1;
-      gap: 12px;
-      min-height: 0;
-    }
-
-    .pane {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      background: var(--input-bg);
-      border: 1px solid var(--panel-border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-
-    .pane-header {
-      padding: 7px 12px;
-      background: rgba(0, 0, 0, 0.15);
-      border-bottom: 1px solid var(--panel-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .pane-title {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--vscode-descriptionForeground, #9e9e9e);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .pane-status {
-      font-size: 11px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .status-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--success);
-    }
-
-    .status-dot.error {
-      background: var(--error);
-    }
-
-    .editor-wrapper {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      min-height: 0;
-    }
-
-    textarea {
-      flex: 1;
-      width: 100%;
-      padding: 10px 12px;
-      font-family: var(--font-mono);
-      font-size: 12.5px;
-      line-height: 1.5;
-      background: transparent;
-      color: var(--fg);
-      border: none;
-      outline: none;
-      resize: none;
-      user-select: text;
-    }
-
-    pre {
-      flex: 1;
-      width: 100%;
-      padding: 10px 12px;
-      font-family: var(--font-mono);
-      font-size: 12.5px;
-      line-height: 1.5;
-      background: transparent;
-      color: var(--fg);
-      border: none;
-      overflow: auto;
-      user-select: text;
-      white-space: pre;
-    }
-
-    .error-drawer {
-      padding: 6px 12px;
-      background: rgba(244, 135, 113, 0.12);
-      border-top: 1px solid rgba(244, 135, 113, 0.3);
-      color: var(--error);
-      font-size: 11px;
-      font-family: var(--font-mono);
-      max-height: 80px;
-      overflow-y: auto;
-      display: none;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    /* Footer Action Bar */
-    .footer-bar {
-      margin-top: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding-top: 8px;
-      border-top: 1px solid var(--panel-border);
-    }
-
-    .hints {
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground, #7a7a7a);
-      display: flex;
-      gap: 14px;
-    }
-
-    .kbd {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 3px;
-      padding: 1px 5px;
-      font-size: 10px;
-      font-family: var(--font-mono);
-      color: var(--fg);
-    }
-
-    .primary-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
 
     .btn-primary {
       background: var(--accent);
       color: var(--accent-fg);
       border: none;
-      padding: 6px 14px;
-      border-radius: 6px;
+      padding: 5px 14px;
+      border-radius: 4px;
       font-size: 11.5px;
       font-weight: 600;
       cursor: pointer;
@@ -858,113 +946,100 @@ function getWebviewContent(logoSrc?: string): string {
     .btn-primary:hover {
       background: var(--accent-hover);
     }
-
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--fg);
-      border: 1px solid var(--panel-border);
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 11.5px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.15s ease;
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.2);
-    }
   </style>
 </head>
 <body>
 
-  <!-- Top Brand Bar -->
-  <div class="top-bar">
-    <div class="brand">
-      ${logoSrc ? `<img src="${logoSrc}" alt="Konvert" style="width: 26px; height: 26px; border-radius: 6px; object-fit: contain; background: rgba(255,255,255,0.05); padding: 2px;" />` : `<div class="brand-icon">K</div>`}
-      <div>
-        <span class="brand-title">Konvert</span>
-        <span class="brand-tag">Deterministic English-to-Code</span>
+  <!-- Studio Header -->
+  <div class="studio-header">
+    <div class="brand-section">
+      ${logoSrc ? `<img src="${logoSrc}" alt="Konvert" class="brand-logo" />` : `<div style="font-weight:900; color:var(--accent);">K</div>`}
+      <div class="brand-meta">
+        <div class="brand-title">
+          <span>Konvert</span>
+          <span class="studio-badge">IDE Studio</span>
+        </div>
       </div>
     </div>
-    <div class="status-chips">
-      <div class="chip chip-latency" id="latencyChip">⚡ 0.8ms compile</div>
-      <div class="chip chip-success">✓ 0% Hallucination</div>
-      <div class="chip">🔒 100% Offline</div>
+
+    <div class="telemetry-row">
+      <div class="pill pill-latency" id="latencyPill">
+        <div class="pulsing-dot"></div>
+        <span id="latencyText">⚡ 0.8ms compile</span>
+      </div>
+      <div class="pill" style="color: var(--success); border-color: rgba(78, 201, 176, 0.3);">✓ 0.0% Hallucination</div>
+      <div class="pill">🔒 100% Offline</div>
     </div>
   </div>
 
-  <!-- Controls Bar -->
-  <div class="toolbar">
-    <div class="segmented-control" id="langTabs">
-      <button class="segmented-btn active" data-lang="python">Python 3.12</button>
-      <button class="segmented-btn" data-lang="java">Java 21</button>
-      <button class="segmented-btn" data-lang="cpp">C++20</button>
-      <button class="segmented-btn" data-lang="all">All Targets</button>
+  <!-- Tabs Bar -->
+  <div class="studio-tabs-bar">
+    <div class="ide-tabs" id="langTabs">
+      <button class="ide-tab active" data-lang="python">Python 3.12</button>
+      <button class="ide-tab" data-lang="java">Java 21</button>
+      <button class="ide-tab" data-lang="cpp">C++20</button>
+      <button class="ide-tab" data-lang="all">All Targets</button>
     </div>
 
-    <div class="tool-actions">
-      <button id="normalizeBtn" class="btn-action">
-        <span>✨</span> Normalize English
+    <div class="tab-actions">
+      <button id="normalizeBtn" class="action-icon-btn" title="Normalize Casual English (Ctrl+Shift+N)">
+        <span>✨</span> Normalize
       </button>
-      <button id="clearBtn" class="btn-action">
+      <button id="clearBtn" class="action-icon-btn" title="Clear Editor">
         <span>🗑️</span> Clear
       </button>
     </div>
   </div>
 
-  <!-- Quick Templates Row -->
-  <div class="snippets-row">
-    <span class="snippet-label">Quick Snippets:</span>
-    <span class="snippet-pill" data-template="print">Print</span>
-    <span class="snippet-pill" data-template="function">Function</span>
-    <span class="snippet-pill" data-template="variable">Variable</span>
-    <span class="snippet-pill" data-template="filter">Filter List</span>
-    <span class="snippet-pill" data-template="conditional">If / Else</span>
-    <span class="snippet-pill" data-template="loop">For Each</span>
-    <span class="snippet-pill" data-template="class">Class Record</span>
+  <!-- Quick Snippets Tray -->
+  <div class="snippet-tray">
+    <span class="snippet-tag">Snippets:</span>
+    <span class="snippet-chip" data-template="print">Print</span>
+    <span class="snippet-chip" data-template="function">Function</span>
+    <span class="snippet-chip" data-template="variable">Variable</span>
+    <span class="snippet-chip" data-template="filter">Filter</span>
+    <span class="snippet-chip" data-template="conditional">If / Else</span>
+    <span class="snippet-chip" data-template="loop">For Each</span>
+    <span class="snippet-chip" data-template="class">Class Record</span>
   </div>
 
-  <!-- Split Panes -->
-  <div class="panes-container">
-    <!-- Left Pane: Input -->
-    <div class="pane">
-      <div class="pane-header">
-        <span class="pane-title">English Intent / CNL</span>
-        <div class="pane-status" id="grammarStatus">
-          <span class="status-dot"></span>
-          <span style="font-size: 10px; font-weight: 600; color: var(--success);" id="grammarLabel">Valid</span>
-        </div>
+  <!-- Main Workspace -->
+  <div class="workspace-split">
+    <!-- Left Column: English Intent -->
+    <div class="editor-column">
+      <div class="column-breadcrumbs">
+        <span>source > logic.eng (English Intent)</span>
+        <span id="sourceCharCount">0 chars</span>
       </div>
-      <div class="editor-wrapper">
+      <div class="editor-body">
+        <div class="line-gutter" id="inputGutter">1</div>
         <textarea id="input" spellcheck="false" placeholder="Write plain English or Structured CNL...&#10;e.g.&#10;print hello world&#10;calculate total = price * 1.18&#10;define function add(a: Int, b: Int) -> Int:&#10;  return a + b&#10;end function">print hello world</textarea>
       </div>
-      <div id="errorDrawer" class="error-drawer"></div>
+      <div id="errorDrawer" class="error-tray"></div>
     </div>
 
-    <!-- Right Pane: Output -->
-    <div class="pane">
-      <div class="pane-header">
-        <span class="pane-title" id="outputPaneTitle">Generated Python 3.12 (PEP 8)</span>
-        <span id="charCount" style="font-size: 10px; color: var(--vscode-descriptionForeground);">0 chars</span>
+    <!-- Right Column: Emitted Target Code -->
+    <div class="editor-column">
+      <div class="column-breadcrumbs">
+        <span id="targetBreadcrumb">dist > logic.py (Emitted Python 3.12)</span>
+        <span id="targetCharCount">0 chars</span>
       </div>
-      <div class="editor-wrapper">
+      <div class="editor-body">
+        <div class="line-gutter" id="outputGutter">1</div>
         <pre id="output"></pre>
       </div>
     </div>
   </div>
 
-  <!-- Footer Action Bar -->
-  <div class="footer-bar">
-    <div class="hints">
+  <!-- Studio Footer -->
+  <div class="studio-footer">
+    <div class="key-hints">
       <span><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> Insert to Editor</span>
       <span><span class="kbd">Ctrl</span> + <span class="kbd">Alt</span> + <span class="kbd">K</span> Quick HUD</span>
+      <span><span class="kbd">Ctrl</span> + <span class="kbd">Alt</span> + <span class="kbd">T</span> Reactive Twin</span>
     </div>
-    <div class="primary-actions">
+
+    <div class="footer-actions">
       <button id="copyBtn" class="btn-secondary">
         <span id="copyIcon">📋</span> Copy Code
       </button>
@@ -978,12 +1053,13 @@ function getWebviewContent(logoSrc?: string): string {
     const vscode = acquireVsCodeApi();
     const inputEl = document.getElementById('input');
     const outputEl = document.getElementById('output');
+    const inputGutter = document.getElementById('inputGutter');
+    const outputGutter = document.getElementById('outputGutter');
     const errorDrawer = document.getElementById('errorDrawer');
-    const grammarStatus = document.getElementById('grammarStatus');
-    const grammarLabel = document.getElementById('grammarLabel');
-    const outputPaneTitle = document.getElementById('outputPaneTitle');
-    const charCount = document.getElementById('charCount');
-    const latencyChip = document.getElementById('latencyChip');
+    const latencyText = document.getElementById('latencyText');
+    const targetBreadcrumb = document.getElementById('targetBreadcrumb');
+    const sourceCharCount = document.getElementById('sourceCharCount');
+    const targetCharCount = document.getElementById('targetCharCount');
     const langTabs = document.getElementById('langTabs');
     const normalizeBtn = document.getElementById('normalizeBtn');
     const copyBtn = document.getElementById('copyBtn');
@@ -1002,7 +1078,23 @@ function getWebviewContent(logoSrc?: string): string {
       class: ['define class User:', '  field name as String', '  field age as Int', '  field active as Bool with default true', 'end class'].join('\\n')
     };
 
+    function updateGutters() {
+      const inLines = (inputEl.value.match(/\\n/g) || []).length + 1;
+      let inNums = '';
+      for (let i = 1; i <= inLines; i++) inNums += i + '<br>';
+      inputGutter.innerHTML = inNums;
+
+      const outLines = (outputEl.textContent.match(/\\n/g) || []).length + 1;
+      let outNums = '';
+      for (let i = 1; i <= outLines; i++) outNums += i + '<br>';
+      outputGutter.innerHTML = outNums;
+
+      sourceCharCount.textContent = inputEl.value.length + ' chars';
+      targetCharCount.textContent = outputEl.textContent.length + ' chars';
+    }
+
     function triggerCompile() {
+      updateGutters();
       vscode.postMessage({
         command: 'compile',
         text: inputEl.value,
@@ -1011,32 +1103,37 @@ function getWebviewContent(logoSrc?: string): string {
     }
 
     inputEl.addEventListener('input', triggerCompile);
+    inputEl.addEventListener('scroll', () => {
+      inputGutter.scrollTop = inputEl.scrollTop;
+    });
 
-    // Segmented language button click
-    langTabs.querySelectorAll('.segmented-btn').forEach(btn => {
+    outputEl.addEventListener('scroll', () => {
+      outputGutter.scrollTop = outputEl.scrollTop;
+    });
+
+    langTabs.querySelectorAll('.ide-tab').forEach(btn => {
       btn.addEventListener('click', () => {
-        langTabs.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
+        langTabs.querySelectorAll('.ide-tab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentLang = btn.getAttribute('data-lang');
 
         if (currentLang === 'java') {
-          outputPaneTitle.textContent = 'Generated Java 21 (Streams & Records)';
+          targetBreadcrumb.textContent = 'dist > Logic.java (Emitted Java 21 Records)';
         } else if (currentLang === 'cpp') {
-          outputPaneTitle.textContent = 'Generated C++20 (Ranges & RAII)';
+          targetBreadcrumb.textContent = 'dist > logic.cpp (Emitted C++20 Ranges)';
         } else if (currentLang === 'all') {
-          outputPaneTitle.textContent = 'Multi-Target (Python, Java, C++)';
+          targetBreadcrumb.textContent = 'Multi-Target (Python, Java, C++)';
         } else {
-          outputPaneTitle.textContent = 'Generated Python 3.12 (PEP 8)';
+          targetBreadcrumb.textContent = 'dist > logic.py (Emitted Python 3.12 PEP 8)';
         }
 
         triggerCompile();
       });
     });
 
-    // Snippets click
-    document.querySelectorAll('.snippet-pill').forEach(pill => {
-      pill.addEventListener('click', () => {
-        const type = pill.getAttribute('data-template');
+    document.querySelectorAll('.snippet-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const type = chip.getAttribute('data-template');
         if (templates[type]) {
           inputEl.value = templates[type];
           triggerCompile();
@@ -1044,26 +1141,20 @@ function getWebviewContent(logoSrc?: string): string {
       });
     });
 
-    // Normalize AI button
     normalizeBtn.addEventListener('click', () => {
       normalizeBtn.disabled = true;
       normalizeBtn.innerHTML = '<span>⏳</span> Normalizing...';
       vscode.postMessage({ command: 'normalize', text: inputEl.value });
     });
 
-    // Clear button
     clearBtn.addEventListener('click', () => {
       inputEl.value = '';
       outputEl.textContent = '';
-      charCount.textContent = '0 chars';
+      updateGutters();
       errorDrawer.style.display = 'none';
-      grammarStatus.querySelector('.status-dot').className = 'status-dot';
-      grammarLabel.textContent = 'Ready';
-      grammarLabel.style.color = 'var(--vscode-descriptionForeground)';
       inputEl.focus();
     });
 
-    // Copy Code button
     copyBtn.addEventListener('click', () => {
       if (outputEl.textContent) {
         vscode.postMessage({ command: 'copy', text: outputEl.textContent });
@@ -1074,14 +1165,12 @@ function getWebviewContent(logoSrc?: string): string {
       }
     });
 
-    // Insert into editor
     insertBtn.addEventListener('click', () => {
       if (outputEl.textContent) {
         vscode.postMessage({ command: 'insertToEditor', code: outputEl.textContent, lang: currentLang });
       }
     });
 
-    // Keyboard shortcuts
     window.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
@@ -1092,18 +1181,14 @@ function getWebviewContent(logoSrc?: string): string {
       }
     });
 
-    // Listen for incoming messages from extension
     window.addEventListener('message', (event) => {
       const msg = event.data;
       if (msg.command === 'updateOutput') {
         if (msg.latency) {
-          latencyChip.textContent = '⚡ ' + msg.latency + 'ms compile';
+          latencyText.textContent = '⚡ ' + msg.latency + 'ms compile';
         }
 
         if (msg.errors && msg.errors.length > 0) {
-          grammarStatus.querySelector('.status-dot').className = 'status-dot error';
-          grammarLabel.textContent = 'Syntax Diagnostic';
-          grammarLabel.style.color = 'var(--error)';
           errorDrawer.style.display = 'block';
           errorDrawer.style.background = 'rgba(244, 135, 113, 0.12)';
           errorDrawer.style.borderColor = 'rgba(244, 135, 113, 0.3)';
@@ -1111,9 +1196,6 @@ function getWebviewContent(logoSrc?: string): string {
           errorDrawer.textContent = 'Line ' + (msg.errors[0].line || 1) + ': ' + msg.errors[0].message;
           outputEl.style.opacity = '0.4';
         } else {
-          grammarStatus.querySelector('.status-dot').className = 'status-dot';
-          grammarLabel.textContent = 'Valid';
-          grammarLabel.style.color = 'var(--success)';
           errorDrawer.style.display = 'none';
 
           if (currentLang === 'all' && msg.allTargets) {
@@ -1129,16 +1211,16 @@ function getWebviewContent(logoSrc?: string): string {
           }
           outputEl.style.opacity = '1';
         }
-        charCount.textContent = outputEl.textContent.length + ' chars';
+        updateGutters();
       } else if (msg.command === 'setNormalizedCNL') {
         normalizeBtn.disabled = false;
-        normalizeBtn.innerHTML = '<span>✨</span> Normalize English';
+        normalizeBtn.innerHTML = '<span>✨</span> Normalize';
         inputEl.value = msg.cnl;
         errorDrawer.style.display = 'none';
         triggerCompile();
       } else if (msg.command === 'normalizeInfo') {
         normalizeBtn.disabled = false;
-        normalizeBtn.innerHTML = '<span>✨</span> Normalize English';
+        normalizeBtn.innerHTML = '<span>✨</span> Normalize';
         errorDrawer.style.display = 'block';
         errorDrawer.style.background = 'rgba(0, 122, 204, 0.1)';
         errorDrawer.style.borderColor = 'rgba(0, 122, 204, 0.3)';
@@ -1146,7 +1228,7 @@ function getWebviewContent(logoSrc?: string): string {
         errorDrawer.textContent = 'ℹ️ ' + msg.info;
       } else if (msg.command === 'normalizeError') {
         normalizeBtn.disabled = false;
-        normalizeBtn.innerHTML = '<span>✨</span> Normalize English';
+        normalizeBtn.innerHTML = '<span>✨</span> Normalize';
         errorDrawer.style.display = 'block';
         errorDrawer.style.background = 'rgba(244, 135, 113, 0.12)';
         errorDrawer.style.borderColor = 'rgba(244, 135, 113, 0.3)';
@@ -1155,7 +1237,6 @@ function getWebviewContent(logoSrc?: string): string {
       }
     });
 
-    // Initial trigger
     triggerCompile();
   </script>
 </body>

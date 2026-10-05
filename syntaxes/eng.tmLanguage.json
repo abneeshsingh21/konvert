@@ -1,0 +1,201 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "English Intent (Konvert)",
+  "scopeName": "source.eng",
+  "fileTypes": ["eng", "knv", "cnl", "intent"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#constants" },
+    { "include": "#keywords-control" },
+    { "include": "#keywords-declaration" },
+    { "include": "#keywords-data" },
+    { "include": "#types" },
+    { "include": "#functions" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.note.eng",
+          "match": "(?i)\\b(?:NOTE|TODO|FIXME)\\b:?.*$"
+        },
+        {
+          "name": "comment.line.double-slash.eng",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.line.number-sign.eng",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.eng",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.eng",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.eng",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.eng",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.true.eng",
+          "match": "(?i)\\b(?:true|yes)\\b"
+        },
+        {
+          "name": "constant.language.boolean.false.eng",
+          "match": "(?i)\\b(?:false|no)\\b"
+        },
+        {
+          "name": "constant.language.null.eng",
+          "match": "(?i)\\b(?:null|none|nil)\\b"
+        },
+        {
+          "name": "constant.numeric.float.eng",
+          "match": "\\b\\d+\\.\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.eng",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "keywords-control": {
+      "patterns": [
+        {
+          "name": "keyword.control.end.eng",
+          "match": "(?i)\\bEND\\s+(?:FUNCTION|CLASS|IF|FOR|WHILE|TRY|ENUM|INTERFACE)\\b"
+        },
+        {
+          "name": "keyword.control.conditional.eng",
+          "match": "(?i)\\b(?:IF|ELSE\\s+IF|ELSE)\\b"
+        },
+        {
+          "name": "keyword.control.loop.eng",
+          "match": "(?i)\\b(?:FOR\\s+EACH|FOR|WHILE|FROM|TO|STEP|IN)\\b"
+        },
+        {
+          "name": "keyword.control.flow.eng",
+          "match": "(?i)\\b(?:RETURN|TRY|CATCH|FINALLY|ASSERT|IMPORT|RAW)\\b"
+        }
+      ]
+    },
+    "keywords-declaration": {
+      "patterns": [
+        {
+          "name": "keyword.declaration.function.eng",
+          "match": "(?i)\\b(?:DEFINE\\s+(?:A\\s+)?FUNCTION|DEFINE\\s+CLASS|DEFINE\\s+ENUM|DEFINE\\s+INTERFACE|DEF|FN|CLASS)\\b"
+        },
+        {
+          "name": "keyword.declaration.variable.eng",
+          "match": "(?i)\\b(?:DECLARE|FIELD|CREATE\\s+(?:A\\s+)?VARIABLE|LET|VAR|CONST)\\b"
+        },
+        {
+          "name": "keyword.other.statement.eng",
+          "match": "(?i)\\b(?:SET|PRINT|SHOW|DISPLAY|ECHO|CALCULATE|COMPUTE)\\b"
+        },
+        {
+          "name": "keyword.operator.word.eng",
+          "match": "(?i)\\b(?:AS|TO|WITH\\s+VALUE|WITH\\s+DEFAULT|EXTENDS|IMPLEMENTS|MESSAGE|RETURNING|RETURNS)\\b"
+        }
+      ]
+    },
+    "keywords-data": {
+      "patterns": [
+        {
+          "name": "keyword.operator.query.eng",
+          "match": "(?i)\\b(?:FILTER|WHERE|SORT\\s+BY|SORT|MAP|REDUCE|USING|WITH\\s+INITIAL|APPEND|REMOVE|PUT|INTO|GET|KEY|KEYS|VALUES|LENGTH|UNIQUE|REVERSE|SLICE|FLATTEN|ZIP|MERGE)\\b"
+        },
+        {
+          "name": "keyword.operator.order.eng",
+          "match": "(?i)\\b(?:ASC|DESC)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.eng",
+          "match": "(?i)\\b(?:AND|OR|NOT|IS|CONTAINS|STARTS\\s+WITH|ENDS\\s+WITH)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.eng",
+          "match": "(?i)\\b(?:Int|Integer|Float|Double|String|Text|Bool|Boolean|Char|Void|None|Auto)\\b"
+        },
+        {
+          "name": "support.type.collection.eng",
+          "match": "(?i)\\b(?:List|Map|Set|Dict|Array|Optional)\\b"
+        },
+        {
+          "name": "entity.name.type.class.eng",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.declaration.eng",
+          "match": "(?i)(?<=\\b(?:FUNCTION|def|fn)\\s+)([a-zA-Z_]\\w*)"
+        },
+        {
+          "name": "entity.name.function.call.eng",
+          "match": "\\b([a-zA-Z_]\\w*)(?=\\s*\\()"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arrow.eng",
+          "match": "->|=>"
+        },
+        {
+          "name": "keyword.operator.comparison.eng",
+          "match": "==|!=|>=|<=|>|<"
+        },
+        {
+          "name": "keyword.operator.assignment.eng",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.arithmetic.eng",
+          "match": "\\+|-|\\*\\*|\\*|/|%"
+        },
+        {
+          "name": "punctuation.separator.colon.eng",
+          "match": ":"
+        },
+        {
+          "name": "punctuation.separator.comma.eng",
+          "match": ","
+        },
+        {
+          "name": "punctuation.separator.dot.eng",
+          "match": "\\."
+        }
+      ]
+    }
+  }
+}
