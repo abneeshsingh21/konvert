@@ -843,36 +843,90 @@ function getWebviewContent(logoSrc?: string): string {
       color: var(--fg);
     }
 
-    /* Main Split Workspace */
-    .workspace-split {
+    /* Main Single Workspace */
+    .workspace-single {
       display: flex;
+      flex-direction: column;
       flex: 1;
       min-height: 0;
       background: var(--bg);
     }
 
-    .editor-column {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      border-right: 1px solid var(--panel-border);
-    }
-
-    .editor-column:last-child {
-      border-right: none;
-    }
-
-    .column-breadcrumbs {
-      background: rgba(0, 0, 0, 0.15);
+    .editor-breadcrumbs {
+      background: rgba(0, 0, 0, 0.18);
       border-bottom: 1px solid var(--panel-border);
-      padding: 5px 12px;
-      font-size: 11px;
+      padding: 6px 14px;
+      font-size: 11.5px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       color: var(--vscode-descriptionForeground, #808080);
       font-family: var(--font-mono);
+    }
+
+    .breadcrumb-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .file-title {
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    .sync-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(78, 201, 176, 0.1);
+      border: 1px solid rgba(78, 201, 176, 0.3);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 10.5px;
+      color: var(--success);
+      font-weight: 500;
+    }
+
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 6px var(--success);
+      animation: pulse 1.5s infinite;
+    }
+
+    .breadcrumb-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .peek-toggle-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--vscode-descriptionForeground, #aaa);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: var(--font-ui);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.12s ease;
+    }
+
+    .peek-toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--fg);
+      border-color: var(--accent);
+    }
+
+    .char-badge {
+      font-size: 10.5px;
+      color: var(--vscode-descriptionForeground, #777);
     }
 
     .editor-body {
@@ -884,19 +938,19 @@ function getWebviewContent(logoSrc?: string): string {
     }
 
     .line-gutter {
-      width: 42px;
-      padding: 12px 6px 12px 0;
+      width: 44px;
+      padding: 12px 8px 12px 0;
       text-align: right;
       font-family: var(--font-mono);
       font-size: var(--font-size);
       line-height: 1.6;
       color: var(--line-number);
       user-select: none;
-      background: rgba(0, 0, 0, 0.05);
-      border-right: 1px solid rgba(255, 255, 255, 0.04);
+      background: rgba(0, 0, 0, 0.06);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    textarea, pre {
+    textarea {
       flex: 1;
       padding: 12px 14px;
       font-family: var(--font-mono);
@@ -913,8 +967,41 @@ function getWebviewContent(logoSrc?: string): string {
       overflow: auto;
     }
 
+    .peek-drawer {
+      border-top: 1px solid var(--panel-border);
+      background: var(--sidebar-bg);
+      max-height: 160px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .peek-header {
+      padding: 4px 14px;
+      background: rgba(0, 0, 0, 0.18);
+      border-bottom: 1px solid var(--panel-border);
+      font-size: 10.5px;
+      font-family: var(--font-mono);
+      display: flex;
+      justify-content: space-between;
+      color: var(--vscode-descriptionForeground, #888);
+    }
+
+    .peek-drawer pre {
+      flex: 1;
+      padding: 8px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      overflow: auto;
+      max-height: 130px;
+      color: #9cdcfe;
+      background: transparent;
+      margin: 0;
+      white-space: pre;
+    }
+
     .error-tray {
-      padding: 6px 12px;
+      padding: 6px 14px;
       background: rgba(244, 135, 113, 0.12);
       border-top: 1px solid rgba(244, 135, 113, 0.3);
       color: var(--error);
@@ -1058,49 +1145,58 @@ function getWebviewContent(logoSrc?: string): string {
     <span class="snippet-chip" data-template="class">Class Record</span>
   </div>
 
-  <!-- Main Workspace -->
-  <div class="workspace-split">
-    <!-- Left Column: English Intent -->
-    <div class="editor-column">
-      <div class="column-breadcrumbs">
-        <span>source > logic.knv (Konvert Source)</span>
-        <span id="sourceCharCount">0 chars</span>
+  <!-- Unified Single Screen Workspace -->
+  <div class="workspace-single">
+    <div class="editor-breadcrumbs">
+      <div class="breadcrumb-left">
+        <span class="file-icon">📄</span>
+        <span class="file-title">logic.knv</span>
+        <span class="sync-badge" id="syncStatus">
+          <span class="live-dot"></span>
+          <span id="syncText">Streaming to Active Editor in Real-Time</span>
+        </span>
       </div>
-      <div class="editor-body">
-        <div class="line-gutter" id="inputGutter">1</div>
-        <textarea id="input" spellcheck="false" placeholder="Write plain English or Structured CNL...&#10;e.g.&#10;print hello world&#10;calculate total = price * 1.18&#10;define function add(a: Int, b: Int) -> Int:&#10;  return a + b&#10;end function">print hello world</textarea>
+      <div class="breadcrumb-right">
+        <button id="togglePeekBtn" class="peek-toggle-btn" title="Peek Emitted Target Code">
+          <span>👁️</span> <span id="peekBtnText">Peek Code</span>
+        </button>
+        <span id="sourceCharCount" class="char-badge">0 chars</span>
       </div>
-      <div id="errorDrawer" class="error-tray"></div>
     </div>
 
-    <!-- Right Column: Emitted Target Code -->
-    <div class="editor-column">
-      <div class="column-breadcrumbs">
-        <span id="targetBreadcrumb">dist > logic.py (Emitted Python 3.12)</span>
+    <div class="editor-body">
+      <div class="line-gutter" id="inputGutter">1</div>
+      <textarea id="input" spellcheck="false" placeholder="Write plain English in real time...&#10;e.g.&#10;print hello world&#10;calculate total = price * 1.18&#10;define function add(a: Int, b: Int) -> Int:&#10;  return a + b&#10;end function">print hello world</textarea>
+    </div>
+
+    <div id="errorDrawer" class="error-tray"></div>
+
+    <!-- Collapsible Peek Target Drawer (hidden by default) -->
+    <div id="peekDrawer" class="peek-drawer" style="display: none;">
+      <div class="peek-header">
+        <span id="targetBreadcrumb">⚡ Emitted Target Code</span>
         <span id="targetCharCount">0 chars</span>
       </div>
-      <div class="editor-body">
-        <div class="line-gutter" id="outputGutter">1</div>
-        <pre id="output"></pre>
-      </div>
+      <pre id="output"></pre>
     </div>
   </div>
 
   <!-- Studio Footer -->
   <div class="studio-footer">
     <div class="key-hints">
-      <span><span class="kbd">Ctrl</span> + <span class="kbd">Enter</span> Insert to Editor</span>
-      <span><span class="kbd">Ctrl</span> + <span class="kbd">Alt</span> + <span class="kbd">K</span> Quick HUD</span>
+      <span><span class="kbd">Ctrl</span> + <span class="kbd">Alt</span> + <span class="kbd">K</span> Realtime HUD</span>
+      <span><span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">N</span> Normalize</span>
       <span><span class="kbd">Ctrl</span> + <span class="kbd">Alt</span> + <span class="kbd">T</span> Reactive Twin</span>
     </div>
 
     <div class="footer-actions">
-      <button id="copyBtn" class="btn-secondary">
+      <button id="copyBtn" class="btn-secondary" title="Copy Emitted Target Code">
         <span id="copyIcon">📋</span> Copy Code
       </button>
-      <button id="insertBtn" class="btn-primary">
-        <span>↵</span> Insert into Active Editor
-      </button>
+      <div class="sync-indicator-btn" id="syncIndicator">
+        <span class="live-dot"></span>
+        <span>Streaming to Editor in Real Time</span>
+      </div>
     </div>
   </div>
 
@@ -1109,7 +1205,6 @@ function getWebviewContent(logoSrc?: string): string {
     const inputEl = document.getElementById('input');
     const outputEl = document.getElementById('output');
     const inputGutter = document.getElementById('inputGutter');
-    const outputGutter = document.getElementById('outputGutter');
     const errorDrawer = document.getElementById('errorDrawer');
     const latencyText = document.getElementById('latencyText');
     const targetBreadcrumb = document.getElementById('targetBreadcrumb');
@@ -1118,25 +1213,40 @@ function getWebviewContent(logoSrc?: string): string {
     const langTabs = document.getElementById('langTabs');
     const normalizeBtn = document.getElementById('normalizeBtn');
     const copyBtn = document.getElementById('copyBtn');
-    const insertBtn = document.getElementById('insertBtn');
     const clearBtn = document.getElementById('clearBtn');
     const liveSyncToggle = document.getElementById('liveSyncToggle');
+    const togglePeekBtn = document.getElementById('togglePeekBtn');
+    const peekDrawer = document.getElementById('peekDrawer');
+    const peekBtnText = document.getElementById('peekBtnText');
 
     let currentLang = 'python';
     let liveSyncTimer = null;
+    let isPeekOpen = false;
+
+    if (togglePeekBtn && peekDrawer) {
+      togglePeekBtn.addEventListener('click', () => {
+        isPeekOpen = !isPeekOpen;
+        peekDrawer.style.display = isPeekOpen ? 'flex' : 'none';
+        peekBtnText.textContent = isPeekOpen ? 'Hide Code' : 'Peek Code';
+        togglePeekBtn.style.borderColor = isPeekOpen ? 'var(--accent)' : 'rgba(255, 255, 255, 0.12)';
+      });
+    }
 
     function queueLiveSync() {
       if (!liveSyncToggle || !liveSyncToggle.checked) return;
       if (currentLang === 'all') return;
       clearTimeout(liveSyncTimer);
       liveSyncTimer = setTimeout(() => {
-        if (outputEl.textContent && (!errorDrawer.style.display || errorDrawer.style.display === 'none')) {
+        if (outputEl && outputEl.textContent && (!errorDrawer.style.display || errorDrawer.style.display === 'none')) {
           vscode.postMessage({
             command: 'liveSyncToEditor',
             code: outputEl.textContent,
             lang: currentLang
           });
-          insertBtn.innerHTML = '<span>✓</span> Synced with Editor (Live)';
+          const syncIndicator = document.getElementById('syncIndicator');
+          if (syncIndicator) {
+            syncIndicator.innerHTML = '<span class="live-dot"></span><span>Streaming in Real Time ✓</span>';
+          }
         }
       }, 60);
     }
@@ -1157,13 +1267,10 @@ function getWebviewContent(logoSrc?: string): string {
       for (let i = 1; i <= inLines; i++) inNums += i + '<br>';
       inputGutter.innerHTML = inNums;
 
-      const outLines = (outputEl.textContent.match(/\\n/g) || []).length + 1;
-      let outNums = '';
-      for (let i = 1; i <= outLines; i++) outNums += i + '<br>';
-      outputGutter.innerHTML = outNums;
-
       sourceCharCount.textContent = inputEl.value.length + ' chars';
-      targetCharCount.textContent = outputEl.textContent.length + ' chars';
+      if (outputEl && targetCharCount) {
+        targetCharCount.textContent = outputEl.textContent.length + ' chars';
+      }
     }
 
     function triggerCompile() {
@@ -1180,10 +1287,6 @@ function getWebviewContent(logoSrc?: string): string {
       inputGutter.scrollTop = inputEl.scrollTop;
     });
 
-    outputEl.addEventListener('scroll', () => {
-      outputGutter.scrollTop = outputEl.scrollTop;
-    });
-
     langTabs.querySelectorAll('.ide-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         langTabs.querySelectorAll('.ide-tab').forEach(b => b.classList.remove('active'));
@@ -1191,13 +1294,13 @@ function getWebviewContent(logoSrc?: string): string {
         currentLang = btn.getAttribute('data-lang');
 
         if (currentLang === 'java') {
-          targetBreadcrumb.textContent = 'dist > Logic.java (Emitted Java 21 Records)';
+          targetBreadcrumb.textContent = '⚡ Emitted Java 21 Records';
         } else if (currentLang === 'cpp') {
-          targetBreadcrumb.textContent = 'dist > logic.cpp (Emitted C++20 Ranges)';
+          targetBreadcrumb.textContent = '⚡ Emitted C++20';
         } else if (currentLang === 'all') {
-          targetBreadcrumb.textContent = 'Multi-Target (Python, Java, C++)';
+          targetBreadcrumb.textContent = '⚡ Multi-Target (Python, Java, C++)';
         } else {
-          targetBreadcrumb.textContent = 'dist > logic.py (Emitted Python 3.12 PEP 8)';
+          targetBreadcrumb.textContent = '⚡ Emitted Python 3.12 PEP 8';
         }
 
         triggerCompile();
@@ -1222,14 +1325,14 @@ function getWebviewContent(logoSrc?: string): string {
 
     clearBtn.addEventListener('click', () => {
       inputEl.value = '';
-      outputEl.textContent = '';
+      if (outputEl) outputEl.textContent = '';
       updateGutters();
       errorDrawer.style.display = 'none';
       inputEl.focus();
     });
 
     copyBtn.addEventListener('click', () => {
-      if (outputEl.textContent) {
+      if (outputEl && outputEl.textContent) {
         vscode.postMessage({ command: 'copy', text: outputEl.textContent });
         copyBtn.innerHTML = '<span>✓</span> Copied!';
         setTimeout(() => {
@@ -1238,16 +1341,16 @@ function getWebviewContent(logoSrc?: string): string {
       }
     });
 
-    insertBtn.addEventListener('click', () => {
-      if (outputEl.textContent) {
-        vscode.postMessage({ command: 'insertToEditor', code: outputEl.textContent, lang: currentLang });
-      }
-    });
-
     window.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
-        insertBtn.click();
+        if (outputEl && outputEl.textContent) {
+          vscode.postMessage({ command: 'liveSyncToEditor', code: outputEl.textContent, lang: currentLang });
+          const syncIndicator = document.getElementById('syncIndicator');
+          if (syncIndicator) {
+            syncIndicator.innerHTML = '<span class="live-dot"></span><span>Synced to Active Editor ✓</span>';
+          }
+        }
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'N' || e.key === 'n')) {
         e.preventDefault();
         normalizeBtn.click();
