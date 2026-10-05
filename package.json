@@ -1,7 +1,7 @@
 {
   "name": "konvert",
   "displayName": "Konvert — English to Code Compiler",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Deterministic English-to-Code compiler — Write English, Ship Code. 0% Hallucinations, <2ms Latency, 100% Offline.",
   "icon": "icon.png",
   "type": "module",
@@ -29,7 +29,8 @@
     "onCommand:konvert.ejectEnglish",
     "onCommand:konvert.rebuildProject",
     "onCommand:konvert.convertEnglishToCode",
-    "onCommand:konvert.downloadModel"
+    "onCommand:konvert.downloadModel",
+    "onCommand:konvert.scaffoldTemplate"
   ],
   "contributes": {
     "languages": [
@@ -57,6 +58,11 @@
         "command": "konvert.quickHUD",
         "title": "Konvert: Quick English-to-Code HUD (Ctrl+Alt+K / Alt+K / Ctrl+Shift+I)",
         "icon": "$(zap)"
+      },
+      {
+        "command": "konvert.scaffoldTemplate",
+        "title": "Konvert: Insert Execution Template (Python / Java / C++)",
+        "icon": "$(file-code)"
       },
       {
         "command": "konvert.openLivePreview",

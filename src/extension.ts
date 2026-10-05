@@ -121,6 +121,65 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
+  // Execution Templates for runnable programs
+  const EXECUTION_TEMPLATES: Record<string, { code: string; cursorLine: number; cursorCol: number }> = {
+    cpp: {
+      code: [
+        '#include <iostream>',
+        '#include <vector>',
+        '#include <string>',
+        '',
+        'int main() {',
+        '    ',
+        '    return 0;',
+        '}',
+        ''
+      ].join('\n'),
+      cursorLine: 5,
+      cursorCol: 4
+    },
+    c: {
+      code: [
+        '#include <stdio.h>',
+        '#include <stdlib.h>',
+        '',
+        'int main() {',
+        '    ',
+        '    return 0;',
+        '}',
+        ''
+      ].join('\n'),
+      cursorLine: 4,
+      cursorCol: 4
+    },
+    java: {
+      code: [
+        'import java.util.*;',
+        '',
+        'public class Main {',
+        '    public static void main(String[] args) {',
+        '        ',
+        '    }',
+        '}',
+        ''
+      ].join('\n'),
+      cursorLine: 4,
+      cursorCol: 8
+    },
+    python: {
+      code: [
+        'def main():',
+        '    ',
+        '',
+        'if __name__ == "__main__":',
+        '    main()',
+        ''
+      ].join('\n'),
+      cursorLine: 1,
+      cursorCol: 4
+    }
+  };
+
   // 2. Command: Real-Time Floating Quick-HUD (Continuous live keystroke streaming into active editor)
   const showQuickConvertHUD = async () => {
     try {
@@ -144,6 +203,24 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       const editor = currentEditor;
+
+      // Auto-populate execution template if document is completely empty
+      const isDocEmpty = editor.document.getText().trim().length === 0;
+      if (isDocEmpty && EXECUTION_TEMPLATES[targetLang]) {
+        const tpl = EXECUTION_TEMPLATES[targetLang];
+        await editor.edit((edit) => {
+          const fullRange = new vscode.Range(
+            editor.document.positionAt(0),
+            editor.document.positionAt(editor.document.getText().length)
+          );
+          edit.replace(fullRange, tpl.code);
+        }, { undoStopBefore: false, undoStopAfter: false });
+
+        const targetPos = new vscode.Position(tpl.cursorLine, tpl.cursorCol);
+        editor.selection = new vscode.Selection(targetPos, targetPos);
+        editor.revealRange(new vscode.Range(targetPos, targetPos));
+      }
+
       let startPos = (editor.selection && editor.selection.active)
         ? editor.selection.active
         : new vscode.Position(0, 0);
@@ -177,17 +254,6 @@ export function activate(context: vscode.ExtensionContext) {
 
       inputBox.buttons = [langBtn, twinBtn, previewBtn];
 
-      // Helper to ensure C++ headers (e.g. #include <iostream>) are present at the top of the file
-      const ensureCppHeader = async (header: string) => {
-        if (targetLang !== 'cpp' && targetLang !== 'c') return;
-        const text = editor.document.getText();
-        if (!text.includes(header)) {
-          await editor.edit((edit) => {
-            edit.insert(new vscode.Position(0, 0), `${header}\n`);
-          }, { undoStopBefore: false, undoStopAfter: false });
-        }
-      };
-
       const applyLiveEdit = async (rawInput: string) => {
         const text = rawInput.trim();
 
@@ -215,11 +281,6 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (res.errors.length === 0 && res.code.trim().length > 0) {
           let codeToWrite = res.code.trimEnd();
-
-          // If C++ needs <iostream> for print, ensure it's at top of file
-          if (codeToWrite.includes('std::cout')) {
-            await ensureCppHeader('#include <iostream>');
-          }
 
           // Match current line indentation level safely
           let currentIndent = '';
@@ -262,8 +323,34 @@ export function activate(context: vscode.ExtensionContext) {
         }
       };
 
+      // Sequential lock queue to avoid race conditions when typing fast
+      let isApplyingEdit = false;
+      let pendingInput: string | null = null;
+
+      const queueLiveEdit = (val: string) => {
+        pendingInput = val;
+        if (isApplyingEdit) return;
+
+        const drain = async () => {
+          if (pendingInput === null) return;
+          const nextVal = pendingInput;
+          pendingInput = null;
+          isApplyingEdit = true;
+          try {
+            await applyLiveEdit(nextVal);
+          } finally {
+            isApplyingEdit = false;
+            if (pendingInput !== null) {
+              await drain();
+            }
+          }
+        };
+
+        drain();
+      };
+
       inputBox.onDidChangeValue((val) => {
-        applyLiveEdit(val);
+        queueLiveEdit(val);
       });
 
       inputBox.onDidTriggerButton(async (btn) => {
@@ -391,10 +478,56 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
+  const scaffoldExecutionTemplate = async (target?: string) => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showWarningMessage('No active editor open to insert execution template.');
+      return;
+    }
+
+    let lang = target;
+    if (!lang) {
+      const ext = path.extname(editor.document.fileName).toLowerCase();
+      if (ext === '.py') lang = 'python';
+      else if (ext === '.java') lang = 'java';
+      else if (ext === '.cpp' || ext === '.cc' || ext === '.cxx') lang = 'cpp';
+      else if (ext === '.c') lang = 'c';
+      else {
+        const choice = await vscode.window.showQuickPick(
+          [
+            { label: 'Python 3.12 (def main)', description: 'python' },
+            { label: 'Java 21 (public class Main)', description: 'java' },
+            { label: 'C++20 (int main)', description: 'cpp' },
+            { label: 'C (int main)', description: 'c' },
+          ],
+          { placeHolder: 'Select language template to scaffold' }
+        );
+        if (!choice || !choice.description) return;
+        lang = choice.description;
+      }
+    }
+
+    if (lang && EXECUTION_TEMPLATES[lang]) {
+      const tpl = EXECUTION_TEMPLATES[lang];
+      await editor.edit((edit) => {
+        const fullRange = new vscode.Range(
+          editor.document.positionAt(0),
+          editor.document.positionAt(editor.document.getText().length)
+        );
+        edit.replace(fullRange, tpl.code);
+      });
+      const targetPos = new vscode.Position(tpl.cursorLine, tpl.cursorCol);
+      editor.selection = new vscode.Selection(targetPos, targetPos);
+      editor.revealRange(new vscode.Range(targetPos, targetPos));
+      vscode.window.showInformationMessage(`✓ Scaffolded ${lang.toUpperCase()} execution template`);
+    }
+  };
+
   context.subscriptions.push(vscode.commands.registerCommand('konvert.quickHUD', showQuickConvertHUD));
   context.subscriptions.push(vscode.commands.registerCommand('konvert.quickHud', showQuickConvertHUD));
   context.subscriptions.push(vscode.commands.registerCommand('konvert.convertEnglishToCode', showQuickConvertHUD));
   context.subscriptions.push(vscode.commands.registerCommand('intentengine.convertEnglishToCode', showQuickConvertHUD));
+  context.subscriptions.push(vscode.commands.registerCommand('konvert.scaffoldTemplate', scaffoldExecutionTemplate));
 
   // 3. Reactive Continuous Twin-Buffer & Multi-File Project Manager
   const twinBufferManager = new TwinBufferManager();
@@ -1219,6 +1352,7 @@ function getWebviewContent(logoSrc?: string): string {
   <!-- Quick Snippets Tray -->
   <div class="snippet-tray">
     <span class="snippet-tag">Snippets:</span>
+    <span class="snippet-chip" data-template="template" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">⚡ Execution Template</span>
     <span class="snippet-chip" data-template="print">Print</span>
     <span class="snippet-chip" data-template="function">Function</span>
     <span class="snippet-chip" data-template="variable">Variable</span>
@@ -1335,6 +1469,7 @@ function getWebviewContent(logoSrc?: string): string {
     }
 
     const templates = {
+      template: ['define function main() -> Void:', '  print "Hello from Konvert!"', 'end function'].join('\\n'),
       print: 'print hello world',
       function: ['define function add(a: Int, b: Int) -> Int:', '  return a + b', 'end function'].join('\\n'),
       variable: 'declare total as Int with value 100',
