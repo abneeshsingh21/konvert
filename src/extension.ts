@@ -135,10 +135,11 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     const editor = currentEditor;
-    const startPos = editor.selection.active;
+    let startPos = editor.selection.active;
     let appliedRange = new vscode.Range(startPos, startPos);
     let hasAppliedAnyCode = false;
     let isAccepted = false;
+    let committedStatementsCount = 0;
 
     const inputBox = vscode.window.createInputBox();
     inputBox.title = `⚡ Konvert — Realtime English to Code (${targetLang.toUpperCase()})`;
@@ -177,7 +178,7 @@ export function activate(context: vscode.ExtensionContext) {
     const applyLiveEdit = async (rawInput: string) => {
       const text = rawInput.trim();
 
-      // If user erased everything in HUD, remove the generated code from editor immediately!
+      // If user erased everything in HUD, remove the generated code for the CURRENT line from editor immediately!
       if (!text) {
         if (hasAppliedAnyCode) {
           await editor.edit((edit) => {
@@ -186,7 +187,11 @@ export function activate(context: vscode.ExtensionContext) {
           appliedRange = new vscode.Range(startPos, startPos);
           hasAppliedAnyCode = false;
         }
-        inputBox.prompt = `[⚡ LIVE TYPING ACTIVE] Start typing English intent — writing directly into editor in real time...`;
+        if (committedStatementsCount > 0) {
+          inputBox.prompt = `[⚡ Line ${committedStatementsCount + 1}] Committed ${committedStatementsCount} statement(s). Type next statement, or press Enter on empty line to finish...`;
+        } else {
+          inputBox.prompt = `[⚡ LIVE TYPING ACTIVE] Start typing English intent — writing directly into editor in real time...`;
+        }
         inputBox.validationMessage = undefined;
         return;
       }
@@ -280,28 +285,82 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     inputBox.onDidAccept(async () => {
-      isAccepted = true;
-      inputBox.hide();
+      const rawVal = inputBox.value.trim();
 
-      // Ensure clean line ending
-      if (hasAppliedAnyCode) {
-        await editor.edit((edit) => {
-          edit.insert(appliedRange.end, '\n');
-        });
-        const nextPos = new vscode.Position(appliedRange.end.line + 1, 0);
-        editor.selection = new vscode.Selection(nextPos, nextPos);
+      // Case 1: Enter on empty input -> user is finished writing!
+      if (!rawVal) {
+        isAccepted = true;
+        inputBox.hide();
+        if (committedStatementsCount > 0) {
+          vscode.window.setStatusBarMessage(
+            `✓ Konvert: Finished writing (${committedStatementsCount} statement${committedStatementsCount > 1 ? 's' : ''} committed)`,
+            3500
+          );
+        }
+        return;
       }
 
-      contextBuilder.addStatement(inputBox.value.trim());
-      vscode.window.setStatusBarMessage(`✓ Konvert: Typed ${targetLang.toUpperCase()} code in real time!`, 3000);
+      // Case 2: Code has been applied live to the editor -> commit this line and advance to next line!
+      if (hasAppliedAnyCode) {
+        // Inspect current line for indentation
+        const lastLineIndex = appliedRange.end.line;
+        const lineText = editor.document.lineAt(lastLineIndex).text;
+        const indentMatch = lineText.match(/^(\s*)/);
+        let nextIndent = indentMatch ? indentMatch[1] : '';
+
+        // If block opening (ends with ':' or '{'), increase indent by 4 spaces
+        if (lineText.trimEnd().endsWith(':') || lineText.trimEnd().endsWith('{')) {
+          nextIndent += '    ';
+        }
+
+        // Commit current line with newline and auto-indentation for next line
+        await editor.edit((edit) => {
+          edit.insert(appliedRange.end, '\n' + nextIndent);
+        }, { undoStopBefore: true, undoStopAfter: false });
+
+        committedStatementsCount++;
+        contextBuilder.addStatement(rawVal);
+
+        // Move active position to the start of the next line (accounting for indentation)
+        const nextLineNum = appliedRange.end.line + 1;
+        const nextCol = nextIndent.length;
+        const nextPos = new vscode.Position(nextLineNum, nextCol);
+
+        editor.selection = new vscode.Selection(nextPos, nextPos);
+        editor.revealRange(new vscode.Range(nextPos, nextPos));
+
+        startPos = nextPos;
+        appliedRange = new vscode.Range(nextPos, nextPos);
+        hasAppliedAnyCode = false;
+
+        // Clear HUD input box and update prompt for continuous writing
+        inputBox.value = '';
+        inputBox.placeholder = `[Line ${committedStatementsCount + 1}] Type next English statement (or Enter on empty line to finish)...`;
+        inputBox.prompt = `✓ Statement ${committedStatementsCount} committed! Keep typing for Line ${committedStatementsCount + 1}, or press Enter on empty line to finish.`;
+        inputBox.validationMessage = undefined;
+
+        // HUD STAYS OPEN! No inputBox.hide() called!
+      } else {
+        // Input text hasn't compiled yet (syntax error or incomplete)
+        const res = compileSnippetForLang(rawVal, targetLang);
+        if (res.errors.length > 0) {
+          inputBox.validationMessage = `Incomplete statement: ${res.errors[0].message} (Complete it or press Esc to cancel)`;
+        }
+      }
     });
 
     inputBox.onDidHide(async () => {
       if (!isAccepted && hasAppliedAnyCode) {
-        // User cancelled via Escape: roll back in real-time to original state
+        // User cancelled via Escape on an uncommitted line: roll back only that line's preview
         await editor.edit((edit) => {
           edit.replace(appliedRange, '');
         });
+      }
+      if (committedStatementsCount > 0) {
+        vscode.window.setStatusBarMessage(
+          `✓ Konvert: Committed ${committedStatementsCount} statement${committedStatementsCount > 1 ? 's' : ''} to ${path.basename(editor.document.fileName)}`,
+          3500
+        );
       }
       inputBox.dispose();
     });
@@ -1285,6 +1344,34 @@ function getWebviewContent(logoSrc?: string): string {
     inputEl.addEventListener('input', triggerCompile);
     inputEl.addEventListener('scroll', () => {
       inputGutter.scrollTop = inputEl.scrollTop;
+    });
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = inputEl.selectionStart;
+        const end = inputEl.selectionEnd;
+        const val = inputEl.value;
+        inputEl.value = val.substring(0, start) + '  ' + val.substring(end);
+        inputEl.selectionStart = inputEl.selectionEnd = start + 2;
+        triggerCompile();
+      } else if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        const start = inputEl.selectionStart;
+        const val = inputEl.value;
+        const currentLine = val.substring(0, start).split('\n').pop() || '';
+        const indentMatch = currentLine.match(/^(\s*)/);
+        let indent = indentMatch ? indentMatch[1] : '';
+        if (currentLine.trimEnd().endsWith(':')) {
+          indent += '  ';
+        }
+        if (indent) {
+          e.preventDefault();
+          const end = inputEl.selectionEnd;
+          inputEl.value = val.substring(0, start) + '\n' + indent + val.substring(end);
+          inputEl.selectionStart = inputEl.selectionEnd = start + 1 + indent.length;
+          triggerCompile();
+        }
+      }
     });
 
     langTabs.querySelectorAll('.ide-tab').forEach(btn => {

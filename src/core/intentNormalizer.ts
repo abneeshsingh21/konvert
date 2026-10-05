@@ -45,8 +45,17 @@ export class IntentNormalizer {
     }
 
     // 1. Check if already standard CNL uppercase keyword
-    if (/^(DEFINE|DECLARE|SET|IF|ELSE|FOR|WHILE|RETURN|PRINT|TRY|CATCH|FINALLY|FILTER|SORT|MAP|ASSERT|IMPORT|RAW)\b/.test(s)) {
+    if (/^(DEFINE|DECLARE|SET|IF|ELSE|FOR|WHILE|RETURN|PRINT|TRY|CATCH|FINALLY|FILTER|SORT|MAP|APPEND|REMOVE|ASSERT|IMPORT|RAW)\b/.test(s)) {
       return s;
+    }
+
+    // 1.5. Normalizing Append / Push to collection
+    // "append 95 to scores" / "add "alice" to names" / "push 95 into scores"
+    const appendMatch = s.match(/^(?:append|add|push)\s+(.+?)\s+(?:to|into)\s+([a-zA-Z_][a-zA-Z0-9_]*)$/i);
+    if (appendMatch) {
+      const val = appendMatch[1].trim();
+      const target = appendMatch[2].trim();
+      return `APPEND ${val} TO ${target}`;
     }
 
     // 2. Normalizing "print ..."
