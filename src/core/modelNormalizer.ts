@@ -121,12 +121,12 @@ export class ModelNormalizer {
         this.pendingRequests.clear();
       });
 
-      // Timeout fallback if daemon doesn't start in 30 seconds
+      // Timeout fallback if daemon doesn't start in 60 seconds
       setTimeout(() => {
         if (!this.isReady) {
           resolve(false);
         }
-      }, 30000);
+      }, 60000);
     });
   }
 

@@ -7,7 +7,15 @@ export class JavaEmitter {
     return '    '.repeat(this.indentLevel);
   }
 
-  public emit(program: ast.ProgramNode): string {
+  public emit(program: ast.ProgramNode, options?: { isSnippet?: boolean }): string {
+    if (options?.isSnippet) {
+      let code = '';
+      for (const stmt of program.body) {
+        code += this.visitStatement(stmt) + '\n';
+      }
+      return code;
+    }
+
     let code = 'import java.util.*;\nimport java.util.stream.*;\n\n';
     code += 'public class Main {\n';
     this.indentLevel++;
@@ -436,7 +444,7 @@ export class JavaEmitter {
   }
 }
 
-export function emitJava(program: ast.ProgramNode): string {
+export function emitJava(program: ast.ProgramNode, options?: { isSnippet?: boolean }): string {
   const emitter = new JavaEmitter();
-  return emitter.emit(program);
+  return emitter.emit(program, options);
 }

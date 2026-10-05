@@ -105,7 +105,7 @@ describe('Konvert Production Grammar 2.0 & Cross-Language Interop Suite', () => 
       const res = compileToCpp(cnl);
       expect(res.errors).toHaveLength(0);
       expect(res.code).toContain('std::future<int> fetchScore(std::string userId) {');
-      expect(res.code).toContain('int score = fetchScore(std::string("usr_42")).get();');
+      expect(res.code).toContain('int score = fetchScore("usr_42").get();');
     });
   });
 

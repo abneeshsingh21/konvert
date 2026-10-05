@@ -7,14 +7,83 @@ export class CppEmitter {
     return '    '.repeat(this.indentLevel);
   }
 
-  public emit(program: ast.ProgramNode): string {
-    let code = '#include <iostream>\n#include <vector>\n#include <string>\n#include <algorithm>\n#include <ranges>\n#include <map>\n#include <memory>\n#include <future>\n\n';
+  public emit(program: ast.ProgramNode, options?: { isSnippet?: boolean }): string {
+    let code = '';
+
+    if (!options?.isSnippet) {
+      const headers = this.collectRequiredHeaders(program);
+      const sortedHeaders = Array.from(headers).sort();
+      for (const h of sortedHeaders) {
+        code += `#include <${h}>\n`;
+      }
+      if (sortedHeaders.length > 0) {
+        code += '\n';
+      }
+    }
 
     for (const stmt of program.body) {
       code += this.visitStatement(stmt) + '\n';
     }
 
     return code;
+  }
+
+  private collectRequiredHeaders(program: ast.ProgramNode): Set<string> {
+    const headers = new Set<string>(['iostream']);
+
+    const checkType = (t: ast.TypeNode) => {
+      if (!t) return;
+      const name = t.name || t.kind;
+      if (name === 'String') headers.add('string');
+      if (name === 'List') headers.add('vector');
+      if (name === 'Map') headers.add('map');
+      if (name === 'Set') headers.add('set');
+      if (t.typeArgs) {
+        for (const arg of t.typeArgs) checkType(arg);
+      }
+    };
+
+    const inspectNode = (node: any) => {
+      if (!node || typeof node !== 'object') return;
+
+      if (node.type === 'Print') {
+        headers.add('iostream');
+      }
+      if (node.type === 'Filter') {
+        headers.add('algorithm');
+        headers.add('ranges');
+        headers.add('vector');
+      }
+      if (node.type === 'Sort') {
+        headers.add('algorithm');
+      }
+      if (node.type === 'Append' || node.type === 'ListLiteral') {
+        headers.add('vector');
+      }
+      if (node.type === 'MapLiteral') {
+        headers.add('map');
+      }
+      if (node.isAsync || node.type === 'AwaitExpr') {
+        headers.add('future');
+      }
+
+      if (node.varType) checkType(node.varType);
+      if (node.returnType) checkType(node.returnType);
+      if (node.paramType) checkType(node.paramType);
+      if (node.fieldType) checkType(node.fieldType);
+      if (node.targetType) checkType(node.targetType);
+
+      for (const key of Object.keys(node)) {
+        if (Array.isArray(node[key])) {
+          for (const item of node[key]) inspectNode(item);
+        } else if (typeof node[key] === 'object' && node[key] !== null) {
+          inspectNode(node[key]);
+        }
+      }
+    };
+
+    inspectNode(program);
+    return headers;
   }
 
   private visitStatement(node: ast.StatementNode): string {
@@ -264,7 +333,7 @@ export class CppEmitter {
         return `(${op}${this.visitExpression(node.operand)})`;
       }
       case 'Literal':
-        if (node.valueType === 'String') return `std::string("${node.value}")`;
+        if (node.valueType === 'String') return `"${node.value}"`;
         if (node.valueType === 'Bool') return node.value ? 'true' : 'false';
         if (node.valueType === 'Null') return 'nullptr';
         return String(node.value);
@@ -351,7 +420,7 @@ export class CppEmitter {
   }
 }
 
-export function emitCpp(program: ast.ProgramNode): string {
+export function emitCpp(program: ast.ProgramNode, options?: { isSnippet?: boolean }): string {
   const emitter = new CppEmitter();
-  return emitter.emit(program);
+  return emitter.emit(program, options);
 }

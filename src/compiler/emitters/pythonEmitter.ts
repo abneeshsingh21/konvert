@@ -448,7 +448,7 @@ export class PythonEmitter {
     }
 }
 
-export function emitPython(astNode: ast.ProgramNode): string {
+export function emitPython(astNode: ast.ProgramNode, options?: { isSnippet?: boolean }): string {
     const emitter = new PythonEmitter();
     return emitter.emit(astNode);
 }

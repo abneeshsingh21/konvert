@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { AtomicRangeReconciler } from './atomicRangeReconciler.js';
 import { IntentNormalizer } from './intentNormalizer.js';
-import { compileToPython, compileToJava, compileToCpp } from '../compiler/index.js';
+import { compileSnippetForLang } from '../compiler/index.js';
 
 export interface TwinSession {
   sourceDocUri: vscode.Uri;
@@ -212,17 +212,9 @@ export class TwinBufferManager {
       const englishQuery = match[1].trim();
       if (!englishQuery || englishQuery.length < 3) continue;
 
-      // Compile intent
+      // Compile intent as clean snippet for target language
       const normalized = IntentNormalizer.normalize(englishQuery);
-      let res: { code: string; errors: any[] };
-
-      if (doc.languageId === 'java') {
-        res = compileToJava(normalized);
-      } else if (doc.languageId === 'cpp' || doc.languageId === 'c') {
-        res = compileToCpp(normalized);
-      } else {
-        res = compileToPython(normalized);
-      }
+      const res = compileSnippetForLang(normalized, doc.languageId);
 
       if (res.errors.length === 0 && res.code.trim()) {
         const editor = vscode.window.visibleTextEditors.find((e) => e.document.uri === doc.uri);

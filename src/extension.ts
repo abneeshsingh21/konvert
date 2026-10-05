@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { parseCNL, compileToPython, compileToJava, compileToCpp, compileAll } from './compiler/index.js';
+import { parseCNL, compileToPython, compileToJava, compileToCpp, compileAll, compileSnippetForLang } from './compiler/index.js';
 import { ContextBuilder } from './core/contextBuilder.js';
 import { ModelNormalizer } from './core/modelNormalizer.js';
 import { ModelDownloader } from './core/modelDownloader.js';
@@ -115,18 +115,35 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
-  // 2. Command: Real-Time Floating Quick-HUD (Popup window right inside the editor)
-  const showQuickConvertHUD = () => {
-    const currentEditor = vscode.window.activeTextEditor || lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
+  // 2. Command: Real-Time Floating Quick-HUD (Continuous live keystroke streaming into active editor)
+  const showQuickConvertHUD = async () => {
+    let currentEditor = vscode.window.activeTextEditor || lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
+
     let targetLang = currentEditor ? currentEditor.document.languageId : 'python';
     if (!['python', 'java', 'cpp', 'c'].includes(targetLang)) {
       targetLang = 'python';
     }
 
+    if (!currentEditor) {
+      // Open a scratch document so the user can immediately see real-time typing
+      const extMap: Record<string, string> = { python: 'py', java: 'java', cpp: 'cpp', c: 'c' };
+      const doc = await vscode.workspace.openTextDocument({
+        language: targetLang,
+        content: ''
+      });
+      currentEditor = await vscode.window.showTextDocument(doc);
+    }
+
+    const editor = currentEditor;
+    const startPos = editor.selection.active;
+    let appliedRange = new vscode.Range(startPos, startPos);
+    let hasAppliedAnyCode = false;
+    let isAccepted = false;
+
     const inputBox = vscode.window.createInputBox();
-    inputBox.title = '⚡ Konvert — English to Code (Realtime HUD)';
-    inputBox.placeholder = 'Write plain English (e.g. "print hello world", "calculate total = price * 1.18", "function add a b -> int")...';
-    inputBox.prompt = `[Target: ${targetLang.toUpperCase()}] Type English intent — press Enter to write code into editor`;
+    inputBox.title = `⚡ Konvert — Realtime English to Code (${targetLang.toUpperCase()})`;
+    inputBox.placeholder = 'Type plain English in realtime (e.g. "print hello world", "calculate total = price * 1.18")...';
+    inputBox.prompt = `[⚡ LIVE TYPING ACTIVE] Writing directly into ${path.basename(editor.document.fileName || 'editor')} in real time!`;
     inputBox.ignoreFocusOut = false;
 
     const langBtn: vscode.QuickInputButton = {
@@ -141,44 +158,91 @@ export function activate(context: vscode.ExtensionContext) {
 
     const previewBtn: vscode.QuickInputButton = {
       iconPath: new vscode.ThemeIcon('layout-sidebar-right'),
-      tooltip: 'Open Split Live Preview Panel',
+      tooltip: 'Open Live Compiler Studio',
     };
 
     inputBox.buttons = [langBtn, twinBtn, previewBtn];
 
-    let currentCompiledCode = '';
-    let isSyntaxValid = false;
+    // Helper to ensure C++ headers (e.g. #include <iostream>) are present at the top of the file
+    const ensureCppHeader = async (header: string) => {
+      if (targetLang !== 'cpp' && targetLang !== 'c') return;
+      const text = editor.document.getText();
+      if (!text.includes(header)) {
+        await editor.edit((edit) => {
+          edit.insert(new vscode.Position(0, 0), `${header}\n`);
+        }, { undoStopBefore: false, undoStopAfter: false });
+      }
+    };
 
-    const runLiveCompilation = (rawInput: string) => {
+    const applyLiveEdit = async (rawInput: string) => {
       const text = rawInput.trim();
+
+      // If user erased everything in HUD, remove the generated code from editor immediately!
       if (!text) {
-        inputBox.prompt = `[Target: ${targetLang.toUpperCase()}] Type English intent — press Enter to write code into editor`;
+        if (hasAppliedAnyCode) {
+          await editor.edit((edit) => {
+            edit.replace(appliedRange, '');
+          }, { undoStopBefore: false, undoStopAfter: false });
+          appliedRange = new vscode.Range(startPos, startPos);
+          hasAppliedAnyCode = false;
+        }
+        inputBox.prompt = `[⚡ LIVE TYPING ACTIVE] Start typing English intent — writing directly into editor in real time...`;
         inputBox.validationMessage = undefined;
-        currentCompiledCode = '';
-        isSyntaxValid = false;
         return;
       }
 
       const t0 = performance.now();
-      const res = compileForLang(text, targetLang);
+      const res = compileSnippetForLang(text, targetLang);
       const elapsedMs = (performance.now() - t0).toFixed(1);
 
       if (res.errors.length === 0 && res.code.trim().length > 0) {
-        currentCompiledCode = res.code;
-        isSyntaxValid = true;
-        const compactPreview = res.code.trim().replace(/\r?\n\s*/g, ' ↵ ');
-        inputBox.prompt = `✨ [${elapsedMs}ms] ${targetLang.toUpperCase()} Output: ${compactPreview}`;
+        let codeToWrite = res.code.trimEnd();
+
+        // If C++ needs <iostream> for print, ensure it's at top of file
+        if (codeToWrite.includes('std::cout')) {
+          await ensureCppHeader('#include <iostream>');
+        }
+
+        // Match current line indentation level
+        const currentLineNum = appliedRange.start.line < editor.document.lineCount ? appliedRange.start.line : editor.document.lineCount - 1;
+        const lineText = editor.document.lineAt(currentLineNum).text;
+        const indentMatch = lineText.match(/^(\s*)/);
+        const currentIndent = indentMatch ? indentMatch[1] : '';
+
+        if (currentIndent && codeToWrite.includes('\n')) {
+          codeToWrite = codeToWrite
+            .split('\n')
+            .map((line, idx) => (idx > 0 && line.trim() ? currentIndent + line : line))
+            .join('\n');
+        }
+
+        // Atomically replace the current applied range with the new code in REAL TIME
+        await editor.edit((edit) => {
+          edit.replace(appliedRange, codeToWrite);
+        }, { undoStopBefore: false, undoStopAfter: false });
+
+        // Update the tracked range to match the newly inserted code
+        const lines = codeToWrite.split('\n');
+        const endLine = appliedRange.start.line + lines.length - 1;
+        const endChar = (lines.length === 1 ? appliedRange.start.character : 0) + lines[lines.length - 1].length;
+        appliedRange = new vscode.Range(appliedRange.start, new vscode.Position(endLine, endChar));
+        hasAppliedAnyCode = true;
+
+        // Position cursor right at the end of the freshly typed code
+        editor.selection = new vscode.Selection(appliedRange.end, appliedRange.end);
+        editor.revealRange(appliedRange, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+
+        const compactPreview = codeToWrite.replace(/\r?\n\s*/g, ' ↵ ');
+        inputBox.prompt = `⚡ [${elapsedMs}ms] Live in editor: ${compactPreview}`;
         inputBox.validationMessage = undefined;
       } else {
-        currentCompiledCode = '';
-        isSyntaxValid = false;
         const hint = res.errors[0]?.message || 'Type complete intent...';
         inputBox.prompt = `⏳ Typing intent... (${hint})`;
       }
     };
 
     inputBox.onDidChangeValue((val) => {
-      runLiveCompilation(val);
+      applyLiveEdit(val);
     });
 
     inputBox.onDidTriggerButton(async (btn) => {
@@ -191,8 +255,9 @@ export function activate(context: vscode.ExtensionContext) {
           ],
           { placeHolder: 'Select target compilation language' }
         );
-        if (choice) {
+        if (choice && choice.description) {
           targetLang = choice.description;
+          inputBox.title = `⚡ Konvert — Realtime English to Code (${targetLang.toUpperCase()})`;
           inputBox.buttons = [
             {
               iconPath: new vscode.ThemeIcon('symbol-variable'),
@@ -201,73 +266,44 @@ export function activate(context: vscode.ExtensionContext) {
             twinBtn,
             previewBtn,
           ];
-          runLiveCompilation(inputBox.value);
+          await applyLiveEdit(inputBox.value);
         }
       } else if (btn === twinBtn) {
+        isAccepted = true;
         inputBox.hide();
         vscode.commands.executeCommand('konvert.openReactiveTwin');
       } else if (btn === previewBtn) {
+        isAccepted = true;
         inputBox.hide();
         vscode.commands.executeCommand('konvert.openLivePreview');
       }
     });
 
     inputBox.onDidAccept(async () => {
-      const text = inputBox.value.trim();
-      if (!text) {
-        inputBox.hide();
-        return;
-      }
-
-      let finalCode = currentCompiledCode;
-      if (!isSyntaxValid || !finalCode) {
-        const res = compileForLang(text, targetLang);
-        if (res.errors.length === 0 && res.code.trim()) {
-          finalCode = res.code;
-        } else {
-          vscode.window.showWarningMessage(`Konvert: Could not compile intent "${text}".`);
-          return;
-        }
-      }
-
+      isAccepted = true;
       inputBox.hide();
 
-      const editor = vscode.window.activeTextEditor || currentEditor || lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
-
-      if (editor) {
-        await editor.edit((editBuilder) => {
-          const pos = editor.selection.active;
-          const lineText = editor.document.lineAt(pos.line).text;
-          const indentMatch = lineText.match(/^(\s*)/);
-          const currentIndent = indentMatch ? indentMatch[1] : '';
-
-          let codeToInsert = finalCode;
-          if (currentIndent && codeToInsert.includes('\n')) {
-            codeToInsert = codeToInsert
-              .split('\n')
-              .map((line, idx) => (idx > 0 && line.trim() ? currentIndent + line : line))
-              .join('\n');
-          }
-          if (!codeToInsert.endsWith('\n')) {
-            codeToInsert += '\n';
-          }
-
-          if (!editor.selection.isEmpty) {
-            editBuilder.replace(editor.selection, codeToInsert);
-          } else {
-            editBuilder.insert(pos, codeToInsert);
-          }
+      // Ensure clean line ending
+      if (hasAppliedAnyCode) {
+        await editor.edit((edit) => {
+          edit.insert(appliedRange.end, '\n');
         });
-
-        contextBuilder.addStatement(text);
-        vscode.window.setStatusBarMessage(`⚡ Konvert: Generated ${targetLang.toUpperCase()} code in <2ms!`, 3000);
-      } else {
-        const doc = await vscode.workspace.openTextDocument({
-          content: finalCode,
-          language: targetLang,
-        });
-        await vscode.window.showTextDocument(doc);
+        const nextPos = new vscode.Position(appliedRange.end.line + 1, 0);
+        editor.selection = new vscode.Selection(nextPos, nextPos);
       }
+
+      contextBuilder.addStatement(inputBox.value.trim());
+      vscode.window.setStatusBarMessage(`✓ Konvert: Typed ${targetLang.toUpperCase()} code in real time!`, 3000);
+    });
+
+    inputBox.onDidHide(async () => {
+      if (!isAccepted && hasAppliedAnyCode) {
+        // User cancelled via Escape: roll back in real-time to original state
+        await editor.edit((edit) => {
+          edit.replace(appliedRange, '');
+        });
+      }
+      inputBox.dispose();
     });
 
     inputBox.show();
@@ -401,6 +437,21 @@ export function activate(context: vscode.ExtensionContext) {
           });
           await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
           vscode.window.showInformationMessage('✓ Code opened in new document');
+        }
+      } else if (message.command === 'liveSyncToEditor') {
+        const editor = lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
+        if (editor && message.code) {
+          const doc = editor.document;
+          const fullRange = new vscode.Range(
+            doc.positionAt(0),
+            doc.positionAt(doc.getText().length)
+          );
+          const newCode = message.code.endsWith('\n') ? message.code : message.code + '\n';
+          if (doc.getText() !== newCode) {
+            await editor.edit((editBuilder) => {
+              editBuilder.replace(fullRange, newCode);
+            }, { undoStopBefore: false, undoStopAfter: false });
+          }
         }
       } else if (message.command === 'copy') {
         if (message.text) {
@@ -982,6 +1033,10 @@ function getWebviewContent(logoSrc?: string): string {
     </div>
 
     <div class="tab-actions">
+      <label class="live-sync-pill" title="Continuously types directly into active VS Code editor in real time">
+        <input type="checkbox" id="liveSyncToggle" checked style="accent-color: var(--accent); cursor: pointer;" />
+        <span style="font-size: 11px; font-weight: 600; color: var(--accent); cursor: pointer;">⚡ Live Sync to Editor</span>
+      </label>
       <button id="normalizeBtn" class="action-icon-btn" title="Normalize Casual English (Ctrl+Shift+N)">
         <span>✨</span> Normalize
       </button>
@@ -1065,8 +1120,26 @@ function getWebviewContent(logoSrc?: string): string {
     const copyBtn = document.getElementById('copyBtn');
     const insertBtn = document.getElementById('insertBtn');
     const clearBtn = document.getElementById('clearBtn');
+    const liveSyncToggle = document.getElementById('liveSyncToggle');
 
     let currentLang = 'python';
+    let liveSyncTimer = null;
+
+    function queueLiveSync() {
+      if (!liveSyncToggle || !liveSyncToggle.checked) return;
+      if (currentLang === 'all') return;
+      clearTimeout(liveSyncTimer);
+      liveSyncTimer = setTimeout(() => {
+        if (outputEl.textContent && (!errorDrawer.style.display || errorDrawer.style.display === 'none')) {
+          vscode.postMessage({
+            command: 'liveSyncToEditor',
+            code: outputEl.textContent,
+            lang: currentLang
+          });
+          insertBtn.innerHTML = '<span>✓</span> Synced with Editor (Live)';
+        }
+      }, 60);
+    }
 
     const templates = {
       print: 'print hello world',
@@ -1212,6 +1285,7 @@ function getWebviewContent(logoSrc?: string): string {
           outputEl.style.opacity = '1';
         }
         updateGutters();
+        queueLiveSync();
       } else if (msg.command === 'setNormalizedCNL') {
         normalizeBtn.disabled = false;
         normalizeBtn.innerHTML = '<span>✨</span> Normalize';

@@ -62,6 +62,43 @@ export function compileAll(input: string): {
     };
 }
 
+export function compileSnippetToPython(input: string): { code: string; errors: ast.DiagnosticError[] } {
+    const parseResult = parseWithIntentNormalization(input);
+    if (parseResult.errors.length > 0) {
+        return { code: '', errors: parseResult.errors };
+    }
+    const code = emitPython(parseResult.program, { isSnippet: true });
+    return { code, errors: [] };
+}
+
+export function compileSnippetToJava(input: string): { code: string; errors: ast.DiagnosticError[] } {
+    const parseResult = parseWithIntentNormalization(input);
+    if (parseResult.errors.length > 0) {
+        return { code: '', errors: parseResult.errors };
+    }
+    const code = emitJava(parseResult.program, { isSnippet: true });
+    return { code, errors: [] };
+}
+
+export function compileSnippetToCpp(input: string): { code: string; errors: ast.DiagnosticError[] } {
+    const parseResult = parseWithIntentNormalization(input);
+    if (parseResult.errors.length > 0) {
+        return { code: '', errors: parseResult.errors };
+    }
+    const code = emitCpp(parseResult.program, { isSnippet: true });
+    return { code, errors: [] };
+}
+
+export function compileSnippetForLang(input: string, langId: string): { code: string; errors: ast.DiagnosticError[] } {
+    if (langId === 'java') {
+        return compileSnippetToJava(input);
+    } else if (langId === 'cpp' || langId === 'c') {
+        return compileSnippetToCpp(input);
+    } else {
+        return compileSnippetToPython(input);
+    }
+}
+
 export function compileToPythonFromAST(astNode: ast.ProgramNode): string {
     return emitPython(astNode);
 }

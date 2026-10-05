@@ -1,4 +1,4 @@
-import { compileToPython, compileToJava, compileToCpp } from '../compiler/index.js';
+import { compileSnippetForLang } from '../compiler/index.js';
 import { IntentNormalizer } from './intentNormalizer.js';
 
 export interface SourceSpan {
@@ -249,13 +249,7 @@ export class ASTSpanTracker {
   }
 
   private compileStatement(input: string): { code: string; errors: any[] } {
-    if (this.targetLanguage === 'java') {
-      return compileToJava(input);
-    } else if (this.targetLanguage === 'cpp' || this.targetLanguage === 'c') {
-      return compileToCpp(input);
-    } else {
-      return compileToPython(input);
-    }
+    return compileSnippetForLang(input, this.targetLanguage);
   }
 
   private computeDiffs(oldBlocks: StatementBlock[], newBlocks: StatementBlock[]): SpanDiff[] {
