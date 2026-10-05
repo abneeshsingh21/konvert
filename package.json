@@ -1,7 +1,7 @@
 {
   "name": "konvert",
   "displayName": "Konvert — English to Code Compiler",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Deterministic English-to-Code compiler — Write English, Ship Code. 0% Hallucinations, <2ms Latency, 100% Offline.",
   "icon": "icon.png",
   "type": "module",
@@ -23,6 +23,7 @@
     "onStartupFinished",
     "onLanguage:konvert",
     "onCommand:konvert.quickHUD",
+    "onCommand:konvert.quickHud",
     "onCommand:konvert.openLivePreview",
     "onCommand:konvert.openReactiveTwin",
     "onCommand:konvert.ejectEnglish",
@@ -54,7 +55,7 @@
       },
       {
         "command": "konvert.quickHUD",
-        "title": "Konvert: Quick English-to-Code HUD (Realtime)",
+        "title": "Konvert: Quick English-to-Code HUD (Ctrl+Alt+K / Alt+K / Ctrl+Shift+I)",
         "icon": "$(zap)"
       },
       {
@@ -92,14 +93,22 @@
       {
         "command": "konvert.quickHUD",
         "key": "ctrl+alt+k",
-        "mac": "cmd+alt+k",
-        "when": "editorTextFocus"
+        "mac": "cmd+alt+k"
       },
       {
         "command": "konvert.quickHUD",
         "key": "alt+k",
-        "mac": "alt+k",
-        "when": "editorTextFocus"
+        "mac": "alt+k"
+      },
+      {
+        "command": "konvert.quickHUD",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i"
+      },
+      {
+        "command": "konvert.quickHUD",
+        "key": "ctrl+k ctrl+k",
+        "mac": "cmd+k cmd+k"
       },
       {
         "command": "konvert.openLivePreview",

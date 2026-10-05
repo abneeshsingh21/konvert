@@ -110,265 +110,283 @@ export function activate(context: vscode.ExtensionContext) {
   // 1. Status Bar Item
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBarItem.text = '$(zap) Konvert';
-  statusBarItem.tooltip = 'Konvert: English to Code (Ctrl+Alt+K for Realtime HUD • Ctrl+Alt+T for Reactive Twin)';
+  statusBarItem.tooltip = 'Konvert: English to Code HUD (Ctrl+Alt+K • Alt+K • Ctrl+Shift+I)';
   statusBarItem.command = 'konvert.quickHUD';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
   // 2. Command: Real-Time Floating Quick-HUD (Continuous live keystroke streaming into active editor)
   const showQuickConvertHUD = async () => {
-    let currentEditor = vscode.window.activeTextEditor || lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document.uri.scheme === 'file');
+    try {
+      let currentEditor = vscode.window.activeTextEditor || lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document && e.document.uri && e.document.uri.scheme === 'file');
 
-    let targetLang = currentEditor ? currentEditor.document.languageId : 'python';
-    if (!['python', 'java', 'cpp', 'c'].includes(targetLang)) {
-      targetLang = 'python';
-    }
-
-    if (!currentEditor) {
-      // Open a scratch document so the user can immediately see real-time typing
-      const extMap: Record<string, string> = { python: 'py', java: 'java', cpp: 'cpp', c: 'c' };
-      const doc = await vscode.workspace.openTextDocument({
-        language: targetLang,
-        content: ''
-      });
-      currentEditor = await vscode.window.showTextDocument(doc);
-    }
-
-    const editor = currentEditor;
-    let startPos = editor.selection.active;
-    let appliedRange = new vscode.Range(startPos, startPos);
-    let hasAppliedAnyCode = false;
-    let isAccepted = false;
-    let committedStatementsCount = 0;
-
-    const inputBox = vscode.window.createInputBox();
-    inputBox.title = `⚡ Konvert — Realtime English to Code (${targetLang.toUpperCase()})`;
-    inputBox.placeholder = 'Type plain English in realtime (e.g. "print hello world", "calculate total = price * 1.18")...';
-    inputBox.prompt = `[⚡ LIVE TYPING ACTIVE] Writing directly into ${path.basename(editor.document.fileName || 'editor')} in real time!`;
-    inputBox.ignoreFocusOut = false;
-
-    const langBtn: vscode.QuickInputButton = {
-      iconPath: new vscode.ThemeIcon('symbol-variable'),
-      tooltip: `Target Language: ${targetLang.toUpperCase()} (Click to change)`,
-    };
-
-    const twinBtn: vscode.QuickInputButton = {
-      iconPath: new vscode.ThemeIcon('split-horizontal'),
-      tooltip: 'Open Live Reactive Twin (Continuous Split View)',
-    };
-
-    const previewBtn: vscode.QuickInputButton = {
-      iconPath: new vscode.ThemeIcon('layout-sidebar-right'),
-      tooltip: 'Open Live Compiler Studio',
-    };
-
-    inputBox.buttons = [langBtn, twinBtn, previewBtn];
-
-    // Helper to ensure C++ headers (e.g. #include <iostream>) are present at the top of the file
-    const ensureCppHeader = async (header: string) => {
-      if (targetLang !== 'cpp' && targetLang !== 'c') return;
-      const text = editor.document.getText();
-      if (!text.includes(header)) {
-        await editor.edit((edit) => {
-          edit.insert(new vscode.Position(0, 0), `${header}\n`);
-        }, { undoStopBefore: false, undoStopAfter: false });
+      let targetLang = currentEditor ? currentEditor.document.languageId : 'python';
+      if (!['python', 'java', 'cpp', 'c'].includes(targetLang)) {
+        targetLang = 'python';
       }
-    };
 
-    const applyLiveEdit = async (rawInput: string) => {
-      const text = rawInput.trim();
+      if (!currentEditor || currentEditor.document.isClosed) {
+        // Open a scratch document so the user can immediately see real-time typing
+        const doc = await vscode.workspace.openTextDocument({
+          language: targetLang,
+          content: ''
+        });
+        currentEditor = await vscode.window.showTextDocument(doc);
+      } else {
+        // Ensure the editor is active and focused
+        await vscode.window.showTextDocument(currentEditor.document, currentEditor.viewColumn);
+      }
 
-      // If user erased everything in HUD, remove the generated code for the CURRENT line from editor immediately!
-      if (!text) {
+      const editor = currentEditor;
+      let startPos = (editor.selection && editor.selection.active)
+        ? editor.selection.active
+        : new vscode.Position(0, 0);
+
+      let appliedRange = new vscode.Range(startPos, startPos);
+      let hasAppliedAnyCode = false;
+      let isAccepted = false;
+      let committedStatementsCount = 0;
+
+      const inputBox = vscode.window.createInputBox();
+      inputBox.title = `⚡ Konvert — Realtime English to Code (${targetLang.toUpperCase()})`;
+      inputBox.placeholder = 'Type plain English in realtime (e.g. "print hello world", "calculate total = price * 1.18")...';
+      const docName = (editor.document && editor.document.fileName) ? path.basename(editor.document.fileName) : 'editor';
+      inputBox.prompt = `[⚡ LIVE TYPING ACTIVE] Writing directly into ${docName} in real time!`;
+      inputBox.ignoreFocusOut = true;
+
+      const langBtn: vscode.QuickInputButton = {
+        iconPath: new vscode.ThemeIcon('symbol-variable'),
+        tooltip: `Target Language: ${targetLang.toUpperCase()} (Click to change)`,
+      };
+
+      const twinBtn: vscode.QuickInputButton = {
+        iconPath: new vscode.ThemeIcon('split-horizontal'),
+        tooltip: 'Open Live Reactive Twin (Continuous Split View)',
+      };
+
+      const previewBtn: vscode.QuickInputButton = {
+        iconPath: new vscode.ThemeIcon('layout-sidebar-right'),
+        tooltip: 'Open Live Compiler Studio',
+      };
+
+      inputBox.buttons = [langBtn, twinBtn, previewBtn];
+
+      // Helper to ensure C++ headers (e.g. #include <iostream>) are present at the top of the file
+      const ensureCppHeader = async (header: string) => {
+        if (targetLang !== 'cpp' && targetLang !== 'c') return;
+        const text = editor.document.getText();
+        if (!text.includes(header)) {
+          await editor.edit((edit) => {
+            edit.insert(new vscode.Position(0, 0), `${header}\n`);
+          }, { undoStopBefore: false, undoStopAfter: false });
+        }
+      };
+
+      const applyLiveEdit = async (rawInput: string) => {
+        const text = rawInput.trim();
+
+        // If user erased everything in HUD, remove the generated code for the CURRENT line from editor immediately!
+        if (!text) {
+          if (hasAppliedAnyCode) {
+            await editor.edit((edit) => {
+              edit.replace(appliedRange, '');
+            }, { undoStopBefore: false, undoStopAfter: false });
+            appliedRange = new vscode.Range(startPos, startPos);
+            hasAppliedAnyCode = false;
+          }
+          if (committedStatementsCount > 0) {
+            inputBox.prompt = `[⚡ Line ${committedStatementsCount + 1}] Committed ${committedStatementsCount} statement(s). Type next statement, or press Enter on empty line to finish...`;
+          } else {
+            inputBox.prompt = `[⚡ LIVE TYPING ACTIVE] Start typing English intent — writing directly into editor in real time...`;
+          }
+          inputBox.validationMessage = undefined;
+          return;
+        }
+
+        const t0 = performance.now();
+        const res = compileSnippetForLang(text, targetLang);
+        const elapsedMs = (performance.now() - t0).toFixed(1);
+
+        if (res.errors.length === 0 && res.code.trim().length > 0) {
+          let codeToWrite = res.code.trimEnd();
+
+          // If C++ needs <iostream> for print, ensure it's at top of file
+          if (codeToWrite.includes('std::cout')) {
+            await ensureCppHeader('#include <iostream>');
+          }
+
+          // Match current line indentation level safely
+          let currentIndent = '';
+          if (editor.document.lineCount > 0) {
+            const currentLineNum = Math.max(0, Math.min(appliedRange.start.line, editor.document.lineCount - 1));
+            const lineText = editor.document.lineAt(currentLineNum).text;
+            const indentMatch = lineText.match(/^(\s*)/);
+            currentIndent = indentMatch ? indentMatch[1] : '';
+          }
+
+          if (currentIndent && codeToWrite.includes('\n')) {
+            codeToWrite = codeToWrite
+              .split('\n')
+              .map((line, idx) => (idx > 0 && line.trim() ? currentIndent + line : line))
+              .join('\n');
+          }
+
+          // Atomically replace the current applied range with the new code in REAL TIME
+          await editor.edit((edit) => {
+            edit.replace(appliedRange, codeToWrite);
+          }, { undoStopBefore: false, undoStopAfter: false });
+
+          // Update the tracked range to match the newly inserted code
+          const lines = codeToWrite.split('\n');
+          const endLine = appliedRange.start.line + lines.length - 1;
+          const endChar = (lines.length === 1 ? appliedRange.start.character : 0) + lines[lines.length - 1].length;
+          appliedRange = new vscode.Range(appliedRange.start, new vscode.Position(endLine, endChar));
+          hasAppliedAnyCode = true;
+
+          // Position cursor right at the end of the freshly typed code
+          editor.selection = new vscode.Selection(appliedRange.end, appliedRange.end);
+          editor.revealRange(appliedRange, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+
+          const compactPreview = codeToWrite.replace(/\r?\n\s*/g, ' ↵ ');
+          inputBox.prompt = `⚡ [${elapsedMs}ms] Live in editor: ${compactPreview}`;
+          inputBox.validationMessage = undefined;
+        } else {
+          const hint = res.errors[0]?.message || 'Type complete intent...';
+          inputBox.prompt = `⏳ Typing intent... (${hint})`;
+        }
+      };
+
+      inputBox.onDidChangeValue((val) => {
+        applyLiveEdit(val);
+      });
+
+      inputBox.onDidTriggerButton(async (btn) => {
+        if (btn === langBtn) {
+          const choice = await vscode.window.showQuickPick(
+            [
+              { label: 'Python 3.12', description: 'python' },
+              { label: 'Java 21', description: 'java' },
+              { label: 'C++20', description: 'cpp' },
+            ],
+            { placeHolder: 'Select target compilation language' }
+          );
+          if (choice && choice.description) {
+            targetLang = choice.description;
+            inputBox.title = `⚡ Konvert — Realtime English to Code (${targetLang.toUpperCase()})`;
+            inputBox.buttons = [
+              {
+                iconPath: new vscode.ThemeIcon('symbol-variable'),
+                tooltip: `Target Language: ${targetLang.toUpperCase()} (Click to change)`,
+              },
+              twinBtn,
+              previewBtn,
+            ];
+            await applyLiveEdit(inputBox.value);
+          }
+        } else if (btn === twinBtn) {
+          isAccepted = true;
+          inputBox.hide();
+          vscode.commands.executeCommand('konvert.openReactiveTwin');
+        } else if (btn === previewBtn) {
+          isAccepted = true;
+          inputBox.hide();
+          vscode.commands.executeCommand('konvert.openLivePreview');
+        }
+      });
+
+      inputBox.onDidAccept(async () => {
+        const rawVal = inputBox.value.trim();
+
+        // Case 1: Enter on empty input -> user is finished writing!
+        if (!rawVal) {
+          isAccepted = true;
+          inputBox.hide();
+          if (committedStatementsCount > 0) {
+            vscode.window.setStatusBarMessage(
+              `✓ Konvert: Finished writing (${committedStatementsCount} statement${committedStatementsCount > 1 ? 's' : ''} committed)`,
+              3500
+            );
+          }
+          return;
+        }
+
+        // Case 2: Code has been applied live to the editor -> commit this line and advance to next line!
         if (hasAppliedAnyCode) {
+          // Inspect current line for indentation safely
+          let nextIndent = '';
+          if (editor.document.lineCount > 0) {
+            const lastLineIndex = Math.max(0, Math.min(appliedRange.end.line, editor.document.lineCount - 1));
+            const lineText = editor.document.lineAt(lastLineIndex).text;
+            const indentMatch = lineText.match(/^(\s*)/);
+            nextIndent = indentMatch ? indentMatch[1] : '';
+
+            // If block opening (ends with ':' or '{'), increase indent by 4 spaces
+            if (lineText.trimEnd().endsWith(':') || lineText.trimEnd().endsWith('{')) {
+              nextIndent += '    ';
+            }
+          }
+
+          // Commit current line with newline and auto-indentation for next line
+          await editor.edit((edit) => {
+            edit.insert(appliedRange.end, '\n' + nextIndent);
+          }, { undoStopBefore: true, undoStopAfter: false });
+
+          committedStatementsCount++;
+          contextBuilder.addStatement(rawVal);
+
+          // Move active position to the start of the next line (accounting for indentation)
+          const nextLineNum = appliedRange.end.line + 1;
+          const nextCol = nextIndent.length;
+          const nextPos = new vscode.Position(nextLineNum, nextCol);
+
+          editor.selection = new vscode.Selection(nextPos, nextPos);
+          editor.revealRange(new vscode.Range(nextPos, nextPos));
+
+          startPos = nextPos;
+          appliedRange = new vscode.Range(nextPos, nextPos);
+          hasAppliedAnyCode = false;
+
+          // Clear HUD input box and update prompt for continuous writing
+          inputBox.value = '';
+          inputBox.placeholder = `[Line ${committedStatementsCount + 1}] Type next English statement (or Enter on empty line to finish)...`;
+          inputBox.prompt = `✓ Statement ${committedStatementsCount} committed! Keep typing for Line ${committedStatementsCount + 1}, or press Enter on empty line to finish.`;
+          inputBox.validationMessage = undefined;
+
+          // HUD STAYS OPEN! No inputBox.hide() called!
+        } else {
+          // Input text hasn't compiled yet (syntax error or incomplete)
+          const res = compileSnippetForLang(rawVal, targetLang);
+          if (res.errors.length > 0) {
+            inputBox.validationMessage = `Incomplete statement: ${res.errors[0].message} (Complete it or press Esc to cancel)`;
+          }
+        }
+      });
+
+      inputBox.onDidHide(async () => {
+        if (!isAccepted && hasAppliedAnyCode) {
+          // User cancelled via Escape on an uncommitted line: roll back only that line's preview
           await editor.edit((edit) => {
             edit.replace(appliedRange, '');
-          }, { undoStopBefore: false, undoStopAfter: false });
-          appliedRange = new vscode.Range(startPos, startPos);
-          hasAppliedAnyCode = false;
+          });
         }
-        if (committedStatementsCount > 0) {
-          inputBox.prompt = `[⚡ Line ${committedStatementsCount + 1}] Committed ${committedStatementsCount} statement(s). Type next statement, or press Enter on empty line to finish...`;
-        } else {
-          inputBox.prompt = `[⚡ LIVE TYPING ACTIVE] Start typing English intent — writing directly into editor in real time...`;
-        }
-        inputBox.validationMessage = undefined;
-        return;
-      }
-
-      const t0 = performance.now();
-      const res = compileSnippetForLang(text, targetLang);
-      const elapsedMs = (performance.now() - t0).toFixed(1);
-
-      if (res.errors.length === 0 && res.code.trim().length > 0) {
-        let codeToWrite = res.code.trimEnd();
-
-        // If C++ needs <iostream> for print, ensure it's at top of file
-        if (codeToWrite.includes('std::cout')) {
-          await ensureCppHeader('#include <iostream>');
-        }
-
-        // Match current line indentation level
-        const currentLineNum = appliedRange.start.line < editor.document.lineCount ? appliedRange.start.line : editor.document.lineCount - 1;
-        const lineText = editor.document.lineAt(currentLineNum).text;
-        const indentMatch = lineText.match(/^(\s*)/);
-        const currentIndent = indentMatch ? indentMatch[1] : '';
-
-        if (currentIndent && codeToWrite.includes('\n')) {
-          codeToWrite = codeToWrite
-            .split('\n')
-            .map((line, idx) => (idx > 0 && line.trim() ? currentIndent + line : line))
-            .join('\n');
-        }
-
-        // Atomically replace the current applied range with the new code in REAL TIME
-        await editor.edit((edit) => {
-          edit.replace(appliedRange, codeToWrite);
-        }, { undoStopBefore: false, undoStopAfter: false });
-
-        // Update the tracked range to match the newly inserted code
-        const lines = codeToWrite.split('\n');
-        const endLine = appliedRange.start.line + lines.length - 1;
-        const endChar = (lines.length === 1 ? appliedRange.start.character : 0) + lines[lines.length - 1].length;
-        appliedRange = new vscode.Range(appliedRange.start, new vscode.Position(endLine, endChar));
-        hasAppliedAnyCode = true;
-
-        // Position cursor right at the end of the freshly typed code
-        editor.selection = new vscode.Selection(appliedRange.end, appliedRange.end);
-        editor.revealRange(appliedRange, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
-
-        const compactPreview = codeToWrite.replace(/\r?\n\s*/g, ' ↵ ');
-        inputBox.prompt = `⚡ [${elapsedMs}ms] Live in editor: ${compactPreview}`;
-        inputBox.validationMessage = undefined;
-      } else {
-        const hint = res.errors[0]?.message || 'Type complete intent...';
-        inputBox.prompt = `⏳ Typing intent... (${hint})`;
-      }
-    };
-
-    inputBox.onDidChangeValue((val) => {
-      applyLiveEdit(val);
-    });
-
-    inputBox.onDidTriggerButton(async (btn) => {
-      if (btn === langBtn) {
-        const choice = await vscode.window.showQuickPick(
-          [
-            { label: 'Python 3.12', description: 'python' },
-            { label: 'Java 21', description: 'java' },
-            { label: 'C++20', description: 'cpp' },
-          ],
-          { placeHolder: 'Select target compilation language' }
-        );
-        if (choice && choice.description) {
-          targetLang = choice.description;
-          inputBox.title = `⚡ Konvert — Realtime English to Code (${targetLang.toUpperCase()})`;
-          inputBox.buttons = [
-            {
-              iconPath: new vscode.ThemeIcon('symbol-variable'),
-              tooltip: `Target Language: ${targetLang.toUpperCase()} (Click to change)`,
-            },
-            twinBtn,
-            previewBtn,
-          ];
-          await applyLiveEdit(inputBox.value);
-        }
-      } else if (btn === twinBtn) {
-        isAccepted = true;
-        inputBox.hide();
-        vscode.commands.executeCommand('konvert.openReactiveTwin');
-      } else if (btn === previewBtn) {
-        isAccepted = true;
-        inputBox.hide();
-        vscode.commands.executeCommand('konvert.openLivePreview');
-      }
-    });
-
-    inputBox.onDidAccept(async () => {
-      const rawVal = inputBox.value.trim();
-
-      // Case 1: Enter on empty input -> user is finished writing!
-      if (!rawVal) {
-        isAccepted = true;
-        inputBox.hide();
         if (committedStatementsCount > 0) {
           vscode.window.setStatusBarMessage(
-            `✓ Konvert: Finished writing (${committedStatementsCount} statement${committedStatementsCount > 1 ? 's' : ''} committed)`,
+            `✓ Konvert: Committed ${committedStatementsCount} statement${committedStatementsCount > 1 ? 's' : ''} to ${path.basename(editor.document.fileName)}`,
             3500
           );
         }
-        return;
-      }
+        inputBox.dispose();
+      });
 
-      // Case 2: Code has been applied live to the editor -> commit this line and advance to next line!
-      if (hasAppliedAnyCode) {
-        // Inspect current line for indentation
-        const lastLineIndex = appliedRange.end.line;
-        const lineText = editor.document.lineAt(lastLineIndex).text;
-        const indentMatch = lineText.match(/^(\s*)/);
-        let nextIndent = indentMatch ? indentMatch[1] : '';
-
-        // If block opening (ends with ':' or '{'), increase indent by 4 spaces
-        if (lineText.trimEnd().endsWith(':') || lineText.trimEnd().endsWith('{')) {
-          nextIndent += '    ';
-        }
-
-        // Commit current line with newline and auto-indentation for next line
-        await editor.edit((edit) => {
-          edit.insert(appliedRange.end, '\n' + nextIndent);
-        }, { undoStopBefore: true, undoStopAfter: false });
-
-        committedStatementsCount++;
-        contextBuilder.addStatement(rawVal);
-
-        // Move active position to the start of the next line (accounting for indentation)
-        const nextLineNum = appliedRange.end.line + 1;
-        const nextCol = nextIndent.length;
-        const nextPos = new vscode.Position(nextLineNum, nextCol);
-
-        editor.selection = new vscode.Selection(nextPos, nextPos);
-        editor.revealRange(new vscode.Range(nextPos, nextPos));
-
-        startPos = nextPos;
-        appliedRange = new vscode.Range(nextPos, nextPos);
-        hasAppliedAnyCode = false;
-
-        // Clear HUD input box and update prompt for continuous writing
-        inputBox.value = '';
-        inputBox.placeholder = `[Line ${committedStatementsCount + 1}] Type next English statement (or Enter on empty line to finish)...`;
-        inputBox.prompt = `✓ Statement ${committedStatementsCount} committed! Keep typing for Line ${committedStatementsCount + 1}, or press Enter on empty line to finish.`;
-        inputBox.validationMessage = undefined;
-
-        // HUD STAYS OPEN! No inputBox.hide() called!
-      } else {
-        // Input text hasn't compiled yet (syntax error or incomplete)
-        const res = compileSnippetForLang(rawVal, targetLang);
-        if (res.errors.length > 0) {
-          inputBox.validationMessage = `Incomplete statement: ${res.errors[0].message} (Complete it or press Esc to cancel)`;
-        }
-      }
-    });
-
-    inputBox.onDidHide(async () => {
-      if (!isAccepted && hasAppliedAnyCode) {
-        // User cancelled via Escape on an uncommitted line: roll back only that line's preview
-        await editor.edit((edit) => {
-          edit.replace(appliedRange, '');
-        });
-      }
-      if (committedStatementsCount > 0) {
-        vscode.window.setStatusBarMessage(
-          `✓ Konvert: Committed ${committedStatementsCount} statement${committedStatementsCount > 1 ? 's' : ''} to ${path.basename(editor.document.fileName)}`,
-          3500
-        );
-      }
-      inputBox.dispose();
-    });
-
-    inputBox.show();
+      inputBox.show();
+    } catch (err: any) {
+      console.error('Konvert Quick HUD failed to open:', err);
+      vscode.window.showErrorMessage(`Konvert Quick HUD failed to open: ${err?.message || err}`);
+    }
   };
 
   context.subscriptions.push(vscode.commands.registerCommand('konvert.quickHUD', showQuickConvertHUD));
+  context.subscriptions.push(vscode.commands.registerCommand('konvert.quickHud', showQuickConvertHUD));
   context.subscriptions.push(vscode.commands.registerCommand('konvert.convertEnglishToCode', showQuickConvertHUD));
   context.subscriptions.push(vscode.commands.registerCommand('intentengine.convertEnglishToCode', showQuickConvertHUD));
 
