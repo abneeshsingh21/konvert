@@ -17,6 +17,10 @@ export class ContextBuilder {
     }
   }
 
+  public popStatement(): string | undefined {
+    return this.recentCNLStatements.pop();
+  }
+
   public registerSymbol(entry: SymbolEntry): void {
     this.symbols.set(entry.name, entry);
   }

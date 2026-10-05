@@ -129,13 +129,15 @@ export function activate(context: vscode.ExtensionContext) {
         '#include <vector>',
         '#include <string>',
         '',
+        'using namespace std;',
+        '',
         'int main() {',
         '    ',
         '    return 0;',
         '}',
         ''
       ].join('\n'),
-      cursorLine: 5,
+      cursorLine: 7,
       cursorCol: 4
     },
     c: {
@@ -180,15 +182,28 @@ export function activate(context: vscode.ExtensionContext) {
     }
   };
 
+  const resolveLanguage = (ed: vscode.TextEditor): string => {
+    const doc = ed.document;
+    const ext = path.extname(doc.fileName).toLowerCase();
+    if (ext === '.cpp' || ext === '.cc' || ext === '.cxx' || ext === '.hpp' || ext === '.h') return 'cpp';
+    if (ext === '.c') return 'c';
+    if (ext === '.java') return 'java';
+    if (ext === '.py') return 'python';
+
+    const langId = doc.languageId ? doc.languageId.toLowerCase() : '';
+    if (langId === 'cpp' || langId === 'c++') return 'cpp';
+    if (langId === 'c') return 'c';
+    if (langId === 'java') return 'java';
+    if (langId === 'python') return 'python';
+    return 'python';
+  };
+
   // 2. Command: Real-Time Floating Quick-HUD (Continuous live keystroke streaming into active editor)
   const showQuickConvertHUD = async () => {
     try {
       let currentEditor = vscode.window.activeTextEditor || lastActiveEditor || vscode.window.visibleTextEditors.find((e) => e.document && e.document.uri && e.document.uri.scheme === 'file');
 
-      let targetLang = currentEditor ? currentEditor.document.languageId : 'python';
-      if (!['python', 'java', 'cpp', 'c'].includes(targetLang)) {
-        targetLang = 'python';
-      }
+      let targetLang = currentEditor ? resolveLanguage(currentEditor) : 'python';
 
       if (!currentEditor || currentEditor.document.isClosed) {
         // Open a scratch document so the user can immediately see real-time typing
@@ -203,20 +218,24 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       const editor = currentEditor;
+      targetLang = resolveLanguage(editor);
 
       // Auto-populate execution template if document is completely empty
-      const isDocEmpty = editor.document.getText().trim().length === 0;
+      const docText = editor.document.getText();
+      const isDocEmpty = docText.trim().length === 0;
       if (isDocEmpty && EXECUTION_TEMPLATES[targetLang]) {
         const tpl = EXECUTION_TEMPLATES[targetLang];
         await editor.edit((edit) => {
           const fullRange = new vscode.Range(
             editor.document.positionAt(0),
-            editor.document.positionAt(editor.document.getText().length)
+            editor.document.positionAt(docText.length)
           );
           edit.replace(fullRange, tpl.code);
         }, { undoStopBefore: false, undoStopAfter: false });
 
-        const targetPos = new vscode.Position(tpl.cursorLine, tpl.cursorCol);
+        const maxLine = Math.max(0, editor.document.lineCount - 1);
+        const targetLine = Math.min(tpl.cursorLine, maxLine);
+        const targetPos = new vscode.Position(targetLine, tpl.cursorCol);
         editor.selection = new vscode.Selection(targetPos, targetPos);
         editor.revealRange(new vscode.Range(targetPos, targetPos));
       }
@@ -228,23 +247,49 @@ export function activate(context: vscode.ExtensionContext) {
       let appliedRange = new vscode.Range(startPos, startPos);
       let hasAppliedAnyCode = false;
       let isAccepted = false;
-      let committedStatementsCount = 0;
+
+      // Track session history for editing and undoing previous lines
+      interface CommittedLine {
+        english: string;
+        code: string;
+        codeRange: vscode.Range;
+        newlineRange: vscode.Range;
+        lineIndex: number;
+      }
+      const committedHistory: CommittedLine[] = [];
+
+      const getActualLineNum = () => {
+        return (editor.selection && editor.selection.active)
+          ? editor.selection.active.line + 1
+          : editor.document.lineCount;
+      };
 
       const inputBox = vscode.window.createInputBox();
-      inputBox.title = `⚡ Konvert — Realtime English to Code (${targetLang.toUpperCase()})`;
-      inputBox.placeholder = 'Type plain English in realtime (e.g. "print hello world", "calculate total = price * 1.18")...';
-      const docName = (editor.document && editor.document.fileName) ? path.basename(editor.document.fileName) : 'editor';
-      inputBox.prompt = `[⚡ LIVE TYPING ACTIVE] Writing directly into ${docName} in real time!`;
       inputBox.ignoreFocusOut = true;
+
+      const editPrevBtn: vscode.QuickInputButton = {
+        iconPath: new vscode.ThemeIcon('arrow-left'),
+        tooltip: 'Edit Previous Line (Ctrl+Z / type "undo")',
+      };
+
+      const deletePrevBtn: vscode.QuickInputButton = {
+        iconPath: new vscode.ThemeIcon('trash'),
+        tooltip: 'Delete Previous Committed Line',
+      };
 
       const langBtn: vscode.QuickInputButton = {
         iconPath: new vscode.ThemeIcon('symbol-variable'),
-        tooltip: `Target Language: ${targetLang.toUpperCase()} (Click to change)`,
+        tooltip: `Target: ${targetLang.toUpperCase()} (Click to change)`,
+      };
+
+      const templateBtn: vscode.QuickInputButton = {
+        iconPath: new vscode.ThemeIcon('file-code'),
+        tooltip: `Scaffold ${targetLang.toUpperCase()} Execution Template`,
       };
 
       const twinBtn: vscode.QuickInputButton = {
         iconPath: new vscode.ThemeIcon('split-horizontal'),
-        tooltip: 'Open Live Reactive Twin (Continuous Split View)',
+        tooltip: 'Open Live Reactive Twin',
       };
 
       const previewBtn: vscode.QuickInputButton = {
@@ -252,7 +297,91 @@ export function activate(context: vscode.ExtensionContext) {
         tooltip: 'Open Live Compiler Studio',
       };
 
-      inputBox.buttons = [langBtn, twinBtn, previewBtn];
+      const updateButtonsAndPrompts = (customPrompt?: string) => {
+        const curLine = getActualLineNum();
+        const docName = (editor.document && editor.document.fileName) ? path.basename(editor.document.fileName) : 'editor';
+
+        inputBox.title = `⚡ Konvert [Line ${curLine}] — Realtime English to Code (${targetLang.toUpperCase()})`;
+
+        if (committedHistory.length > 0) {
+          const prev = committedHistory[committedHistory.length - 1];
+          inputBox.buttons = [editPrevBtn, deletePrevBtn, langBtn, templateBtn, twinBtn, previewBtn];
+          inputBox.placeholder = `[Line ${curLine}] Type next statement, or click ⬅ to edit Line ${prev.lineIndex + 1} (or type "undo")...`;
+          inputBox.prompt = customPrompt || `✓ Line ${prev.lineIndex + 1} committed ("${prev.english}"). Keep typing for Line ${curLine}, or click ⬅ to edit previous line.`;
+        } else {
+          inputBox.buttons = [langBtn, templateBtn, twinBtn, previewBtn];
+          inputBox.placeholder = `[Line ${curLine}] Type English for ${docName} (e.g. "print hello world", "calculate total = price * 1.18")...`;
+          inputBox.prompt = customPrompt || `[⚡ LIVE TYPING ACTIVE] Writing directly into ${docName} on Line ${curLine} in real time!`;
+        }
+      };
+
+      updateButtonsAndPrompts();
+
+      // Undo last committed line and restore it into HUD for editing
+      const popAndEditPrevious = async () => {
+        if (committedHistory.length === 0) {
+          vscode.window.showInformationMessage('Konvert: No previous lines in this session to edit.');
+          return;
+        }
+
+        // If there's uncommitted preview text on the current line, clear it
+        if (hasAppliedAnyCode) {
+          await editor.edit((edit) => {
+            edit.replace(appliedRange, '');
+          }, { undoStopBefore: false, undoStopAfter: false });
+          hasAppliedAnyCode = false;
+        }
+
+        const last = committedHistory.pop()!;
+        contextBuilder.popStatement();
+
+        // Delete the newline and indentation that was placed after last
+        await editor.edit((edit) => {
+          edit.delete(last.newlineRange);
+        }, { undoStopBefore: false, undoStopAfter: false });
+
+        // Restore appliedRange to the previous statement's code range
+        appliedRange = last.codeRange;
+        startPos = last.codeRange.start;
+        hasAppliedAnyCode = true;
+
+        editor.selection = new vscode.Selection(appliedRange.end, appliedRange.end);
+        editor.revealRange(appliedRange, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+
+        inputBox.value = last.english;
+        updateButtonsAndPrompts(`✏️ Editing Line ${last.lineIndex + 1}: "${last.english}" (Modify and press Enter)`);
+      };
+
+      // Delete the previous line entirely from the file
+      const deletePrevious = async () => {
+        if (committedHistory.length === 0) {
+          vscode.window.showInformationMessage('Konvert: No previous lines to delete.');
+          return;
+        }
+
+        if (hasAppliedAnyCode) {
+          await editor.edit((edit) => {
+            edit.replace(appliedRange, '');
+          }, { undoStopBefore: false, undoStopAfter: false });
+          hasAppliedAnyCode = false;
+        }
+
+        const last = committedHistory.pop()!;
+        contextBuilder.popStatement();
+
+        await editor.edit((edit) => {
+          const deleteRange = new vscode.Range(last.codeRange.start, last.newlineRange.end);
+          edit.delete(deleteRange);
+        }, { undoStopBefore: true, undoStopAfter: false });
+
+        startPos = last.codeRange.start;
+        appliedRange = new vscode.Range(startPos, startPos);
+        editor.selection = new vscode.Selection(startPos, startPos);
+        editor.revealRange(new vscode.Range(startPos, startPos));
+
+        inputBox.value = '';
+        updateButtonsAndPrompts(`🗑️ Deleted Line ${last.lineIndex + 1}. Now on Line ${startPos.line + 1}.`);
+      };
 
       const applyLiveEdit = async (rawInput: string) => {
         const text = rawInput.trim();
@@ -266,11 +395,7 @@ export function activate(context: vscode.ExtensionContext) {
             appliedRange = new vscode.Range(startPos, startPos);
             hasAppliedAnyCode = false;
           }
-          if (committedStatementsCount > 0) {
-            inputBox.prompt = `[⚡ Line ${committedStatementsCount + 1}] Committed ${committedStatementsCount} statement(s). Type next statement, or press Enter on empty line to finish...`;
-          } else {
-            inputBox.prompt = `[⚡ LIVE TYPING ACTIVE] Start typing English intent — writing directly into editor in real time...`;
-          }
+          updateButtonsAndPrompts();
           inputBox.validationMessage = undefined;
           return;
         }
@@ -315,11 +440,11 @@ export function activate(context: vscode.ExtensionContext) {
           editor.revealRange(appliedRange, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
 
           const compactPreview = codeToWrite.replace(/\r?\n\s*/g, ' ↵ ');
-          inputBox.prompt = `⚡ [${elapsedMs}ms] Live in editor: ${compactPreview}`;
+          inputBox.prompt = `⚡ [${elapsedMs}ms] Live on Line ${appliedRange.start.line + 1}: ${compactPreview}`;
           inputBox.validationMessage = undefined;
         } else {
           const hint = res.errors[0]?.message || 'Type complete intent...';
-          inputBox.prompt = `⏳ Typing intent... (${hint})`;
+          inputBox.prompt = `⏳ Line ${appliedRange.start.line + 1}: typing intent... (${hint})`;
         }
       };
 
@@ -350,30 +475,46 @@ export function activate(context: vscode.ExtensionContext) {
       };
 
       inputBox.onDidChangeValue((val) => {
+        const trimmed = val.trim().toLowerCase();
+        if ((trimmed === 'undo' || trimmed === ':undo' || trimmed === 'back' || trimmed === ':back') && committedHistory.length > 0) {
+          popAndEditPrevious();
+          return;
+        }
         queueLiveEdit(val);
       });
 
+      // Synchronize HUD if the user moves their cursor in the editor
+      const selectionListener = vscode.window.onDidChangeTextEditorSelection((e) => {
+        if (e.textEditor === editor && !hasAppliedAnyCode && !isApplyingEdit) {
+          startPos = e.selections[0].active;
+          appliedRange = new vscode.Range(startPos, startPos);
+          updateButtonsAndPrompts();
+        }
+      });
+
       inputBox.onDidTriggerButton(async (btn) => {
-        if (btn === langBtn) {
+        if (btn === editPrevBtn) {
+          await popAndEditPrevious();
+        } else if (btn === deletePrevBtn) {
+          await deletePrevious();
+        } else if (btn === templateBtn) {
+          await scaffoldExecutionTemplate(targetLang);
+          startPos = editor.selection.active;
+          appliedRange = new vscode.Range(startPos, startPos);
+          updateButtonsAndPrompts(`✓ Scaffolded ${targetLang.toUpperCase()} execution template.`);
+        } else if (btn === langBtn) {
           const choice = await vscode.window.showQuickPick(
             [
               { label: 'Python 3.12', description: 'python' },
               { label: 'Java 21', description: 'java' },
               { label: 'C++20', description: 'cpp' },
+              { label: 'C', description: 'c' },
             ],
             { placeHolder: 'Select target compilation language' }
           );
           if (choice && choice.description) {
             targetLang = choice.description;
-            inputBox.title = `⚡ Konvert — Realtime English to Code (${targetLang.toUpperCase()})`;
-            inputBox.buttons = [
-              {
-                iconPath: new vscode.ThemeIcon('symbol-variable'),
-                tooltip: `Target Language: ${targetLang.toUpperCase()} (Click to change)`,
-              },
-              twinBtn,
-              previewBtn,
-            ];
+            updateButtonsAndPrompts();
             await applyLiveEdit(inputBox.value);
           }
         } else if (btn === twinBtn) {
@@ -394,9 +535,9 @@ export function activate(context: vscode.ExtensionContext) {
         if (!rawVal) {
           isAccepted = true;
           inputBox.hide();
-          if (committedStatementsCount > 0) {
+          if (committedHistory.length > 0) {
             vscode.window.setStatusBarMessage(
-              `✓ Konvert: Finished writing (${committedStatementsCount} statement${committedStatementsCount > 1 ? 's' : ''} committed)`,
+              `✓ Konvert: Finished writing (${committedHistory.length} statement${committedHistory.length > 1 ? 's' : ''} committed)`,
               3500
             );
           }
@@ -419,18 +560,30 @@ export function activate(context: vscode.ExtensionContext) {
             }
           }
 
+          const currentCodeRange = appliedRange;
+          const currentLineIndex = appliedRange.start.line;
+          const newlineText = '\n' + nextIndent;
+
           // Commit current line with newline and auto-indentation for next line
           await editor.edit((edit) => {
-            edit.insert(appliedRange.end, '\n' + nextIndent);
+            edit.insert(appliedRange.end, newlineText);
           }, { undoStopBefore: true, undoStopAfter: false });
 
-          committedStatementsCount++;
-          contextBuilder.addStatement(rawVal);
-
-          // Move active position to the start of the next line (accounting for indentation)
-          const nextLineNum = appliedRange.end.line + 1;
+          // Calculate newlineRange
+          const nextLineNum = currentCodeRange.end.line + 1;
           const nextCol = nextIndent.length;
           const nextPos = new vscode.Position(nextLineNum, nextCol);
+          const newlineInsertedRange = new vscode.Range(currentCodeRange.end, nextPos);
+
+          committedHistory.push({
+            english: rawVal,
+            code: editor.document.getText(currentCodeRange),
+            codeRange: currentCodeRange,
+            newlineRange: newlineInsertedRange,
+            lineIndex: currentLineIndex,
+          });
+
+          contextBuilder.addStatement(rawVal);
 
           editor.selection = new vscode.Selection(nextPos, nextPos);
           editor.revealRange(new vscode.Range(nextPos, nextPos));
@@ -441,8 +594,7 @@ export function activate(context: vscode.ExtensionContext) {
 
           // Clear HUD input box and update prompt for continuous writing
           inputBox.value = '';
-          inputBox.placeholder = `[Line ${committedStatementsCount + 1}] Type next English statement (or Enter on empty line to finish)...`;
-          inputBox.prompt = `✓ Statement ${committedStatementsCount} committed! Keep typing for Line ${committedStatementsCount + 1}, or press Enter on empty line to finish.`;
+          updateButtonsAndPrompts();
           inputBox.validationMessage = undefined;
 
           // HUD STAYS OPEN! No inputBox.hide() called!
@@ -450,21 +602,22 @@ export function activate(context: vscode.ExtensionContext) {
           // Input text hasn't compiled yet (syntax error or incomplete)
           const res = compileSnippetForLang(rawVal, targetLang);
           if (res.errors.length > 0) {
-            inputBox.validationMessage = `Incomplete statement: ${res.errors[0].message} (Complete it or press Esc to cancel)`;
+            inputBox.validationMessage = `Incomplete statement: ${res.errors[0].message} (Complete it, or click ⬅ to edit previous line)`;
           }
         }
       });
 
       inputBox.onDidHide(async () => {
+        selectionListener.dispose();
         if (!isAccepted && hasAppliedAnyCode) {
           // User cancelled via Escape on an uncommitted line: roll back only that line's preview
           await editor.edit((edit) => {
             edit.replace(appliedRange, '');
           });
         }
-        if (committedStatementsCount > 0) {
+        if (committedHistory.length > 0) {
           vscode.window.setStatusBarMessage(
-            `✓ Konvert: Committed ${committedStatementsCount} statement${committedStatementsCount > 1 ? 's' : ''} to ${path.basename(editor.document.fileName)}`,
+            `✓ Konvert: Committed ${committedHistory.length} statement${committedHistory.length > 1 ? 's' : ''} to ${path.basename(editor.document.fileName)}`,
             3500
           );
         }
@@ -487,12 +640,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     let lang = target;
     if (!lang) {
-      const ext = path.extname(editor.document.fileName).toLowerCase();
-      if (ext === '.py') lang = 'python';
-      else if (ext === '.java') lang = 'java';
-      else if (ext === '.cpp' || ext === '.cc' || ext === '.cxx') lang = 'cpp';
-      else if (ext === '.c') lang = 'c';
-      else {
+      const resolved = resolveLanguage(editor);
+      if (EXECUTION_TEMPLATES[resolved]) {
+        lang = resolved;
+      } else {
         const choice = await vscode.window.showQuickPick(
           [
             { label: 'Python 3.12 (def main)', description: 'python' },
