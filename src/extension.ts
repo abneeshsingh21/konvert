@@ -30,6 +30,12 @@ export function activate(context: vscode.ExtensionContext) {
   async function ensureModelDownloaded(interactive: boolean = false): Promise<boolean> {
     const targetDir = ModelDownloader.getTargetModelDir(context.globalStorageUri.fsPath);
     if (ModelDownloader.isModelInstalled(targetDir) || ModelDownloader.isModelInstalled(path.join(context.extensionPath, 'models'))) {
+      if (statusBarItem) {
+        statusBarItem.text = '$(zap) Konvert: Ready (AI Engine Online)';
+        statusBarItem.tooltip = `Konvert: AI Engine Online (${targetDir})\nCtrl+Shift+I / Alt+K / Ctrl+Alt+K for Quick HUD`;
+      }
+      // Automatically pre-warm local model daemon in background so inference is instant
+      ModelNormalizer.getInstance(context.extensionPath).start().catch(() => {});
       return true;
     }
 

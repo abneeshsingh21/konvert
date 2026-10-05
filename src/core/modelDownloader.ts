@@ -27,11 +27,20 @@ export class ModelDownloader {
       return path.resolve(process.env.KONVERT_MODEL_DIR);
     }
 
+    if (preferredDir && this.isModelInstalled(path.join(preferredDir, 'models'))) {
+      return path.join(preferredDir, 'models');
+    }
+
+    const homeDir = path.join(os.homedir(), '.konvert', 'models');
+    if (this.isModelInstalled(homeDir)) {
+      return homeDir;
+    }
+
     if (preferredDir) {
       return path.join(preferredDir, 'models');
     }
 
-    return path.join(os.homedir(), '.konvert', 'models');
+    return homeDir;
   }
 
   /**

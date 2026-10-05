@@ -37,9 +37,44 @@ export class IntentNormalizer {
            .replace(/\b(?:as)\b/i, 'AS')
            .replace(/\b(?:with\s+default)\b/i, 'WITH DEFAULT');
     }
+    // Conditionals multi-line headers
+    if (/^(?:else\s+if|elif)\s+(.+?)\s*:?$/i.test(s)) {
+      const cond = s.match(/^(?:else\s+if|elif)\s+(.+?)\s*:?$/i)![1].trim();
+      return `ELSE IF ${cond}:`;
+    }
+    if (/^else\s*:?$/i.test(s)) return 'ELSE:';
+    if (/^if\s+(.+?)\s*:?$/i.test(s) && !s.includes(' else ')) {
+      const cond = s.match(/^if\s+(.+?)\s*:?$/i)![1].trim();
+      return `IF ${cond}:`;
+    }
     if (/^(?:end\s+if)\b/i.test(s)) return 'END IF';
+
+    // Loop multi-line headers
+    if (/^(?:for\s+each)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+(.+?)\s*:?$/i.test(s) && !s.includes('\n')) {
+      const m = s.match(/^(?:for\s+each)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+(.+?)\s*:?$/i)!;
+      return `FOR EACH ${m[1]} IN ${m[2].trim()}:`;
+    }
+    if (/^for\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+step\s+(.+?))?\s*:?$/i.test(s)) {
+      const m = s.match(/^for\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+from\s+(.+?)\s+to\s+(.+?)(?:\s+step\s+(.+?))?\s*:?$/i)!;
+      const stepPart = m[4] ? ` STEP ${m[4].trim()}` : '';
+      return `FOR ${m[1]} FROM ${m[2].trim()} TO ${m[3].trim()}${stepPart}:`;
+    }
+    if (/^while\s+(.+?)\s*:?$/i.test(s) && !s.toUpperCase().startsWith('END WHILE')) {
+      const cond = s.match(/^while\s+(.+?)\s*:?$/i)![1].trim();
+      return `WHILE ${cond}:`;
+    }
     if (/^(?:end\s+for)\b/i.test(s)) return 'END FOR';
     if (/^(?:end\s+while)\b/i.test(s)) return 'END WHILE';
+
+    // Exception handling headers
+    if (/^try\s*:?$/i.test(s)) return 'TRY:';
+    if (/^catch\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:as|:)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:?$/i.test(s)) {
+      const m = s.match(/^catch\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:as|:)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:?$/i)!;
+      return `CATCH ${m[1]} AS ${this.normalizeTypeName(m[2])}:`;
+    }
+    if (/^finally\s*:?$/i.test(s)) return 'FINALLY:';
+    if (/^(?:end\s+try)\b/i.test(s)) return 'END TRY';
+
     if (/^(?:import)\b/i.test(s)) {
       s = s.replace(/^(?:import)\b/i, 'IMPORT').replace(/\b(?:as)\b/i, 'AS');
     }
