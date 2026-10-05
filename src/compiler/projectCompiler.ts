@@ -34,7 +34,7 @@ export interface ProjectCompileResult {
 
 export class ProjectCompiler {
   /**
-   * Scans a directory recursively for all .kvt or .cnl files
+   * Scans a directory recursively for all .knv files (with legacy support for .eng/.cnl/.kvt)
    */
   static findSourceFiles(dir: string, baseDir: string = dir): string[] {
     let results: string[] = [];
@@ -48,7 +48,7 @@ export class ProjectCompiler {
         if (file !== 'node_modules' && file !== 'dist' && file !== '.git') {
           results = results.concat(this.findSourceFiles(fullPath, baseDir));
         }
-      } else if (file.endsWith('.kvt') || file.endsWith('.cnl') || file.endsWith('.eng') || file.endsWith('.knv')) {
+      } else if (file.endsWith('.knv') || file.endsWith('.eng') || file.endsWith('.cnl') || file.endsWith('.kvt')) {
         results.push(fullPath);
       }
     }

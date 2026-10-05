@@ -414,7 +414,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand('konvert.openLivePreview', runLivePreview));
   context.subscriptions.push(vscode.commands.registerCommand('intentengine.openLivePreview', runLivePreview));
 
-  // 5. Rich Hover Provider for English Intent files (.eng, .knv)
+  // 5. Rich Hover Provider for Konvert files (.knv)
   const hoverDocs: Record<string, string> = {
     'DEFINE FUNCTION': '### ⚡ Konvert Function Declaration\n\nDeclares a deterministic, type-annotated function.\n\n```english\nDEFINE FUNCTION add(a: Int, b: Int) -> Int:\n  RETURN a + b\nEND FUNCTION\n```\n\n* Compiles to: `def add(a: int, b: int) -> int:` in Python.\n* Emits strict types in Java and C++20.',
     'DEFINE CLASS': '### ⚡ Konvert Class / Record\n\nDefines a structured data entity.\n\n```english\nDEFINE CLASS User:\n  FIELD name AS String\n  FIELD age AS Int\nEND CLASS\n```\n\n* Emits `@dataclass` in Python 3.12.\n* Emits `record` in Java 21.\n* Emits type-safe `struct` in C++20.',
@@ -425,7 +425,7 @@ export function activate(context: vscode.ExtensionContext) {
   };
 
   context.subscriptions.push(
-    vscode.languages.registerHoverProvider('english-intent', {
+    vscode.languages.registerHoverProvider('konvert', {
       provideHover(document, position) {
         const lineText = document.lineAt(position.line).text.toUpperCase();
         for (const [kw, doc] of Object.entries(hoverDocs)) {
@@ -440,9 +440,9 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // 6. Document Symbol Provider for Outline view & Breadcrumbs in .eng files
+  // 6. Document Symbol Provider for Outline view & Breadcrumbs in .knv files
   context.subscriptions.push(
-    vscode.languages.registerDocumentSymbolProvider('english-intent', {
+    vscode.languages.registerDocumentSymbolProvider('konvert', {
       provideDocumentSymbols(document) {
         const symbols: vscode.DocumentSymbol[] = [];
         for (let i = 0; i < document.lineCount; i++) {
@@ -1008,7 +1008,7 @@ function getWebviewContent(logoSrc?: string): string {
     <!-- Left Column: English Intent -->
     <div class="editor-column">
       <div class="column-breadcrumbs">
-        <span>source > logic.eng (English Intent)</span>
+        <span>source > logic.knv (Konvert Source)</span>
         <span id="sourceCharCount">0 chars</span>
       </div>
       <div class="editor-body">

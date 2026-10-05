@@ -6,7 +6,7 @@ import { ProjectCompiler, ProjectCompileResult } from '../compiler/projectCompil
 /**
  * WorkspaceWatcher
  *
- * Monitors all English intent files (.eng, .knv) in the workspace,
+ * Monitors all Konvert source files (.knv) in the workspace,
  * maintains the multi-file project dependency graph, and re-compiles connected modules
  * in under 20ms on every file save.
  */
@@ -19,8 +19,8 @@ export class WorkspaceWatcher {
   }
 
   private setupWatcher() {
-    // Watch for .eng and .knv files in workspace
-    this.watcher = vscode.workspace.createFileSystemWatcher('**/*.{eng,knv}');
+    // Watch for .knv files in workspace
+    this.watcher = vscode.workspace.createFileSystemWatcher('**/*.knv');
 
     this.watcher.onDidChange((uri) => this.handleFileEvent(uri, 'change'));
     this.watcher.onDidCreate((uri) => this.handleFileEvent(uri, 'create'));
@@ -32,9 +32,9 @@ export class WorkspaceWatcher {
   private async handleFileEvent(uri: vscode.Uri, eventType: 'change' | 'create' | 'delete') {
     if (uri.scheme !== 'file') return;
 
-    // Automatically trigger incremental multi-file build if project has multiple .eng files
-    const allEngFiles = await vscode.workspace.findFiles('**/*.{eng,knv}', '**/node_modules/**');
-    if (allEngFiles.length <= 1) {
+    // Automatically trigger incremental multi-file build if project has multiple .knv files
+    const allKnvFiles = await vscode.workspace.findFiles('**/*.knv', '**/node_modules/**');
+    if (allKnvFiles.length <= 1) {
       // Single file projects are handled by TwinBufferManager directly
       return;
     }
@@ -54,10 +54,10 @@ export class WorkspaceWatcher {
     }
 
     const rootPath = workspaceFolders[0].uri.fsPath;
-    const engFiles = await vscode.workspace.findFiles('**/*.{eng,knv}', '**/node_modules/**');
+    const knvFiles = await vscode.workspace.findFiles('**/*.knv', '**/node_modules/**');
 
-    if (engFiles.length === 0) {
-      if (notify) vscode.window.showInformationMessage('No .eng files found in workspace.');
+    if (knvFiles.length === 0) {
+      if (notify) vscode.window.showInformationMessage('No .knv files found in workspace.');
       return null;
     }
 

@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "English Intent (Konvert)",
-  "scopeName": "source.eng",
-  "fileTypes": ["eng", "knv", "cnl", "intent"],
+  "name": "Konvert",
+  "scopeName": "source.knv",
+  "fileTypes": ["knv"],
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
@@ -18,15 +18,15 @@
     "comments": {
       "patterns": [
         {
-          "name": "comment.line.note.eng",
+          "name": "comment.line.note.knv",
           "match": "(?i)\\b(?:NOTE|TODO|FIXME)\\b:?.*$"
         },
         {
-          "name": "comment.line.double-slash.eng",
+          "name": "comment.line.double-slash.knv",
           "match": "//.*$"
         },
         {
-          "name": "comment.line.number-sign.eng",
+          "name": "comment.line.number-sign.knv",
           "match": "#.*$"
         }
       ]
@@ -34,23 +34,23 @@
     "strings": {
       "patterns": [
         {
-          "name": "string.quoted.double.eng",
+          "name": "string.quoted.double.knv",
           "begin": "\"",
           "end": "\"",
           "patterns": [
             {
-              "name": "constant.character.escape.eng",
+              "name": "constant.character.escape.knv",
               "match": "\\\\."
             }
           ]
         },
         {
-          "name": "string.quoted.single.eng",
+          "name": "string.quoted.single.knv",
           "begin": "'",
           "end": "'",
           "patterns": [
             {
-              "name": "constant.character.escape.eng",
+              "name": "constant.character.escape.knv",
               "match": "\\\\."
             }
           ]
@@ -60,23 +60,23 @@
     "constants": {
       "patterns": [
         {
-          "name": "constant.language.boolean.true.eng",
+          "name": "constant.language.boolean.true.knv",
           "match": "(?i)\\b(?:true|yes)\\b"
         },
         {
-          "name": "constant.language.boolean.false.eng",
+          "name": "constant.language.boolean.false.knv",
           "match": "(?i)\\b(?:false|no)\\b"
         },
         {
-          "name": "constant.language.null.eng",
+          "name": "constant.language.null.knv",
           "match": "(?i)\\b(?:null|none|nil)\\b"
         },
         {
-          "name": "constant.numeric.float.eng",
+          "name": "constant.numeric.float.knv",
           "match": "\\b\\d+\\.\\d+\\b"
         },
         {
-          "name": "constant.numeric.integer.eng",
+          "name": "constant.numeric.integer.knv",
           "match": "\\b\\d+\\b"
         }
       ]
@@ -84,19 +84,19 @@
     "keywords-control": {
       "patterns": [
         {
-          "name": "keyword.control.end.eng",
+          "name": "keyword.control.end.knv",
           "match": "(?i)\\bEND\\s+(?:FUNCTION|CLASS|IF|FOR|WHILE|TRY|ENUM|INTERFACE)\\b"
         },
         {
-          "name": "keyword.control.conditional.eng",
+          "name": "keyword.control.conditional.knv",
           "match": "(?i)\\b(?:IF|ELSE\\s+IF|ELSE)\\b"
         },
         {
-          "name": "keyword.control.loop.eng",
+          "name": "keyword.control.loop.knv",
           "match": "(?i)\\b(?:FOR\\s+EACH|FOR|WHILE|FROM|TO|STEP|IN)\\b"
         },
         {
-          "name": "keyword.control.flow.eng",
+          "name": "keyword.control.flow.knv",
           "match": "(?i)\\b(?:RETURN|TRY|CATCH|FINALLY|ASSERT|IMPORT|RAW)\\b"
         }
       ]
@@ -104,19 +104,19 @@
     "keywords-declaration": {
       "patterns": [
         {
-          "name": "keyword.declaration.function.eng",
+          "name": "keyword.declaration.function.knv",
           "match": "(?i)\\b(?:DEFINE\\s+(?:A\\s+)?FUNCTION|DEFINE\\s+CLASS|DEFINE\\s+ENUM|DEFINE\\s+INTERFACE|DEF|FN|CLASS)\\b"
         },
         {
-          "name": "keyword.declaration.variable.eng",
+          "name": "keyword.declaration.variable.knv",
           "match": "(?i)\\b(?:DECLARE|FIELD|CREATE\\s+(?:A\\s+)?VARIABLE|LET|VAR|CONST)\\b"
         },
         {
-          "name": "keyword.other.statement.eng",
+          "name": "keyword.other.statement.knv",
           "match": "(?i)\\b(?:SET|PRINT|SHOW|DISPLAY|ECHO|CALCULATE|COMPUTE)\\b"
         },
         {
-          "name": "keyword.operator.word.eng",
+          "name": "keyword.operator.word.knv",
           "match": "(?i)\\b(?:AS|TO|WITH\\s+VALUE|WITH\\s+DEFAULT|EXTENDS|IMPLEMENTS|MESSAGE|RETURNING|RETURNS)\\b"
         }
       ]
@@ -124,15 +124,15 @@
     "keywords-data": {
       "patterns": [
         {
-          "name": "keyword.operator.query.eng",
+          "name": "keyword.operator.query.knv",
           "match": "(?i)\\b(?:FILTER|WHERE|SORT\\s+BY|SORT|MAP|REDUCE|USING|WITH\\s+INITIAL|APPEND|REMOVE|PUT|INTO|GET|KEY|KEYS|VALUES|LENGTH|UNIQUE|REVERSE|SLICE|FLATTEN|ZIP|MERGE)\\b"
         },
         {
-          "name": "keyword.operator.order.eng",
+          "name": "keyword.operator.order.knv",
           "match": "(?i)\\b(?:ASC|DESC)\\b"
         },
         {
-          "name": "keyword.operator.logical.eng",
+          "name": "keyword.operator.logical.knv",
           "match": "(?i)\\b(?:AND|OR|NOT|IS|CONTAINS|STARTS\\s+WITH|ENDS\\s+WITH)\\b"
         }
       ]
@@ -140,15 +140,15 @@
     "types": {
       "patterns": [
         {
-          "name": "support.type.primitive.eng",
+          "name": "support.type.primitive.knv",
           "match": "(?i)\\b(?:Int|Integer|Float|Double|String|Text|Bool|Boolean|Char|Void|None|Auto)\\b"
         },
         {
-          "name": "support.type.collection.eng",
+          "name": "support.type.collection.knv",
           "match": "(?i)\\b(?:List|Map|Set|Dict|Array|Optional)\\b"
         },
         {
-          "name": "entity.name.type.class.eng",
+          "name": "entity.name.type.class.knv",
           "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
         }
       ]
@@ -156,11 +156,11 @@
     "functions": {
       "patterns": [
         {
-          "name": "entity.name.function.declaration.eng",
+          "name": "entity.name.function.declaration.knv",
           "match": "(?i)(?<=\\b(?:FUNCTION|def|fn)\\s+)([a-zA-Z_]\\w*)"
         },
         {
-          "name": "entity.name.function.call.eng",
+          "name": "entity.name.function.call.knv",
           "match": "\\b([a-zA-Z_]\\w*)(?=\\s*\\()"
         }
       ]
@@ -168,31 +168,31 @@
     "operators": {
       "patterns": [
         {
-          "name": "keyword.operator.arrow.eng",
+          "name": "keyword.operator.arrow.knv",
           "match": "->|=>"
         },
         {
-          "name": "keyword.operator.comparison.eng",
+          "name": "keyword.operator.comparison.knv",
           "match": "==|!=|>=|<=|>|<"
         },
         {
-          "name": "keyword.operator.assignment.eng",
+          "name": "keyword.operator.assignment.knv",
           "match": "="
         },
         {
-          "name": "keyword.operator.arithmetic.eng",
+          "name": "keyword.operator.arithmetic.knv",
           "match": "\\+|-|\\*\\*|\\*|/|%"
         },
         {
-          "name": "punctuation.separator.colon.eng",
+          "name": "punctuation.separator.colon.knv",
           "match": ":"
         },
         {
-          "name": "punctuation.separator.comma.eng",
+          "name": "punctuation.separator.comma.knv",
           "match": ","
         },
         {
-          "name": "punctuation.separator.dot.eng",
+          "name": "punctuation.separator.dot.knv",
           "match": "\\."
         }
       ]

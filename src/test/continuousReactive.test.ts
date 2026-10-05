@@ -87,13 +87,13 @@ PRINT "Finished"`;
     expect(res.blocks[1].emittedCode).toContain('print("Finished")');
   });
 
-  it('connects multiple continuous Python files with cross-module imports and .eng files', () => {
+  it('connects multiple continuous Python files with cross-module imports and .knv files', () => {
     const srcDir = path.join(tempDir, 'src');
     fs.mkdirSync(srcDir, { recursive: true });
 
-    // File 1: database.eng
+    // File 1: database.knv
     fs.writeFileSync(
-      path.join(srcDir, 'database.eng'),
+      path.join(srcDir, 'database.knv'),
       `DEFINE CLASS Database:
   FIELD host AS String
   FIELD port AS Int WITH DEFAULT 5432
@@ -105,9 +105,9 @@ END FUNCTION`,
       'utf-8'
     );
 
-    // File 2: main.eng
+    // File 2: main.knv
     fs.writeFileSync(
-      path.join(srcDir, 'main.eng'),
+      path.join(srcDir, 'main.knv'),
       `IMPORT "database" AS db
 
 DECLARE myDb AS db.Database WITH VALUE db.Database("localhost", 5432)

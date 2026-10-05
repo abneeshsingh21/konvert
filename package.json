@@ -21,7 +21,7 @@
   },
   "activationEvents": [
     "onStartupFinished",
-    "onLanguage:english-intent",
+    "onLanguage:konvert",
     "onCommand:konvert.quickHUD",
     "onCommand:konvert.openLivePreview",
     "onCommand:konvert.openReactiveTwin",
@@ -33,17 +33,17 @@
   "contributes": {
     "languages": [
       {
-        "id": "english-intent",
-        "aliases": ["English Intent", "Konvert", "eng"],
-        "extensions": [".eng", ".knv", ".cnl", ".intent"],
+        "id": "konvert",
+        "aliases": ["Konvert", "knv"],
+        "extensions": [".knv"],
         "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "english-intent",
-        "scopeName": "source.eng",
-        "path": "./syntaxes/eng.tmLanguage.json"
+        "language": "konvert",
+        "scopeName": "source.knv",
+        "path": "./syntaxes/knv.tmLanguage.json"
       }
     ],
     "commands": [

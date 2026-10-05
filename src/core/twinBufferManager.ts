@@ -15,7 +15,7 @@ export interface TwinSession {
 /**
  * TwinBufferManager
  *
- * Manages continuous real-time synchronization between English source files (.eng)
+ * Manages continuous real-time synchronization between Konvert source files (.knv)
  * and target code files (.py, .java, .cpp), plus live inline #? comment expansion.
  */
 export class TwinBufferManager {
@@ -32,7 +32,7 @@ export class TwinBufferManager {
       vscode.workspace.onDidChangeTextDocument((event) => {
         const doc = event.document;
 
-        // Check if this is an active .eng twin session
+        // Check if this is an active .knv twin session
         const session = this.activeSessions.get(doc.uri.toString());
         if (session) {
           this.queueReconcile(session, doc.getText());
@@ -46,7 +46,7 @@ export class TwinBufferManager {
       })
     );
 
-    // 2. Auto-save target file when source .eng is saved
+    // 2. Auto-save target file when source .knv is saved
     this.disposables.push(
       vscode.workspace.onDidSaveTextDocument(async (doc) => {
         const session = this.activeSessions.get(doc.uri.toString());
@@ -67,7 +67,7 @@ export class TwinBufferManager {
 
   /**
    * Opens or attaches a continuous Reactive Twin split view:
-   * Left pane: .eng file
+   * Left pane: .knv file
    * Right pane: Target code file (.py / .java / .cpp)
    */
   public async openReactiveTwin(sourceUri?: vscode.Uri, targetLang: string = 'python'): Promise<void> {
@@ -78,9 +78,9 @@ export class TwinBufferManager {
     } else if (vscode.window.activeTextEditor) {
       sourceDoc = vscode.window.activeTextEditor.document;
     } else {
-      // Create new untitled .eng file if none open
+      // Create new untitled .knv file if none open
       sourceDoc = await vscode.workspace.openTextDocument({
-        language: 'plaintext',
+        language: 'konvert',
         content: 'print hello world\ncalculate total = price * 1.18\n',
       });
     }
@@ -118,7 +118,7 @@ export class TwinBufferManager {
     };
     this.activeSessions.set(sourceDoc.uri.toString(), session);
 
-    // Display Left Pane: English file
+    // Display Left Pane: Konvert file
     await vscode.window.showTextDocument(sourceDoc, {
       viewColumn: vscode.ViewColumn.One,
       preserveFocus: false,
@@ -141,19 +141,19 @@ export class TwinBufferManager {
   }
 
   /**
-   * Ejects the source English file, leaving only the pure target code file
+   * Ejects the source Konvert (.knv) file, leaving only the pure target code file
    */
   public async ejectEnglish(sourceUri?: vscode.Uri): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     const uri = sourceUri || editor?.document.uri;
 
     if (!uri || uri.scheme !== 'file') {
-      vscode.window.showWarningMessage('Konvert: Open a saved .eng file to eject.');
+      vscode.window.showWarningMessage('Konvert: Open a saved .knv file to eject.');
       return;
     }
 
     const choice = await vscode.window.showWarningMessage(
-      `Are you sure you want to eject "${path.basename(uri.fsPath)}"? The English source file will be deleted, leaving only the compiled code.`,
+      `Are you sure you want to eject "${path.basename(uri.fsPath)}"? The Konvert (.knv) source file will be deleted, leaving only the compiled code.`,
       { modal: true },
       'Eject & Keep Code Only',
       'Cancel'
