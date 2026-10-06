@@ -1,7 +1,7 @@
 {
   "name": "konvert",
   "displayName": "Konvert — English to Code Compiler",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Deterministic English-to-Code compiler — Write English, Ship Code. 0% Hallucinations, <2ms Latency, 100% Offline.",
   "icon": "icon.png",
   "type": "module",
@@ -30,7 +30,9 @@
     "onCommand:konvert.rebuildProject",
     "onCommand:konvert.convertEnglishToCode",
     "onCommand:konvert.downloadModel",
-    "onCommand:konvert.scaffoldTemplate"
+    "onCommand:konvert.scaffoldTemplate",
+    "onCommand:konvert.runActiveFile",
+    "onCommand:konvert.runWithOptions"
   ],
   "contributes": {
     "languages": [
@@ -88,9 +90,62 @@
         "command": "konvert.downloadModel",
         "title": "Konvert: Download AI Language Engine (Instant)",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "konvert.runActiveFile",
+        "title": "Konvert: Run Code (Compile & Execute)",
+        "icon": "$(play)"
+      },
+      {
+        "command": "konvert.runWithOptions",
+        "title": "Konvert: Run Code with Options (Arguments / Benchmark / Clean)",
+        "icon": "$(play-circle)"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "konvert.runActiveFile",
+          "group": "navigation@1",
+          "when": "resourceExtname =~ /\\.(cpp|c|cc|cxx|java|py|knv)$/i"
+        },
+        {
+          "command": "konvert.runWithOptions",
+          "group": "navigation@2",
+          "when": "resourceExtname =~ /\\.(cpp|c|cc|cxx|java|py|knv)$/i"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "command": "konvert.runActiveFile",
+          "group": "navigation@1",
+          "when": "resourceExtname =~ /\\.(cpp|c|cc|cxx|java|py|knv)$/i"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "konvert.runActiveFile",
+          "group": "1_modification@1",
+          "when": "resourceExtname =~ /\\.(cpp|c|cc|cxx|java|py|knv)$/i"
+        },
+        {
+          "command": "konvert.runWithOptions",
+          "group": "1_modification@2",
+          "when": "resourceExtname =~ /\\.(cpp|c|cc|cxx|java|py|knv)$/i"
+        }
+      ]
+    },
     "keybindings": [
+      {
+        "command": "konvert.runActiveFile",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r"
+      },
+      {
+        "command": "konvert.runActiveFile",
+        "key": "f5",
+        "when": "editorTextFocus && resourceExtname =~ /\\.(cpp|c|cc|cxx|java|py|knv)$/i"
+      },
       {
         "command": "konvert.openReactiveTwin",
         "key": "ctrl+alt+t",

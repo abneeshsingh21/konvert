@@ -6,6 +6,7 @@ import { ModelDownloader } from './core/modelDownloader.js';
 import { IntentNormalizer } from './core/intentNormalizer.js';
 import { TwinBufferManager } from './core/twinBufferManager.js';
 import { WorkspaceWatcher } from './core/workspaceWatcher.js';
+import { CodeRunner } from './core/codeRunner.js';
 import { spawn } from 'child_process';
 import * as path from 'path';
 
@@ -120,6 +121,14 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.command = 'konvert.quickHUD';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
+
+  // Universal Run Status Bar Button
+  const runStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+  runStatusBarItem.text = '$(play) Run';
+  runStatusBarItem.tooltip = 'Konvert: Run Code (Compile & Execute in Terminal) [Ctrl+Alt+R / F5]';
+  runStatusBarItem.command = 'konvert.runActiveFile';
+  runStatusBarItem.show();
+  context.subscriptions.push(runStatusBarItem);
 
   // Execution Templates for runnable programs
   const EXECUTION_TEMPLATES: Record<string, { code: string; cursorLine: number; cursorCol: number }> = {
@@ -267,6 +276,11 @@ export function activate(context: vscode.ExtensionContext) {
       const inputBox = vscode.window.createInputBox();
       inputBox.ignoreFocusOut = true;
 
+      const runBtn: vscode.QuickInputButton = {
+        iconPath: new vscode.ThemeIcon('play'),
+        tooltip: 'Run Code in Terminal (Ctrl+Alt+R / F5)',
+      };
+
       const editPrevBtn: vscode.QuickInputButton = {
         iconPath: new vscode.ThemeIcon('arrow-left'),
         tooltip: 'Edit Previous Line (Ctrl+Z / type "undo")',
@@ -307,11 +321,11 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (committedHistory.length > 0) {
           const prev = committedHistory[committedHistory.length - 1];
-          inputBox.buttons = [editPrevBtn, deletePrevBtn, langBtn, templateBtn, twinBtn, previewBtn];
+          inputBox.buttons = [runBtn, editPrevBtn, deletePrevBtn, langBtn, templateBtn, twinBtn, previewBtn];
           inputBox.placeholder = `[Line ${curLine}] Type next statement, or click ⬅ to edit Line ${prev.lineIndex + 1} (or type "undo")...`;
           inputBox.prompt = customPrompt || `✓ Line ${prev.lineIndex + 1} committed ("${prev.english}"). Keep typing for Line ${curLine}, or click ⬅ to edit previous line.`;
         } else {
-          inputBox.buttons = [langBtn, templateBtn, twinBtn, previewBtn];
+          inputBox.buttons = [runBtn, langBtn, templateBtn, twinBtn, previewBtn];
           inputBox.placeholder = `[Line ${curLine}] Type English for ${docName} (e.g. "print hello world", "calculate total = price * 1.18")...`;
           inputBox.prompt = customPrompt || `[⚡ LIVE TYPING ACTIVE] Writing directly into ${docName} on Line ${curLine} in real time!`;
         }
@@ -570,7 +584,11 @@ export function activate(context: vscode.ExtensionContext) {
       });
 
       inputBox.onDidTriggerButton(async (btn) => {
-        if (btn === editPrevBtn) {
+        if (btn === runBtn) {
+          isAccepted = true;
+          inputBox.hide();
+          await CodeRunner.runActiveEditor();
+        } else if (btn === editPrevBtn) {
           await popAndEditPrevious();
         } else if (btn === deletePrevBtn) {
           await deletePrevious();
@@ -840,6 +858,8 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.commands.registerCommand('konvert.convertEnglishToCode', showQuickConvertHUD));
   context.subscriptions.push(vscode.commands.registerCommand('intentengine.convertEnglishToCode', showQuickConvertHUD));
   context.subscriptions.push(vscode.commands.registerCommand('konvert.scaffoldTemplate', scaffoldExecutionTemplate));
+  context.subscriptions.push(vscode.commands.registerCommand('konvert.runActiveFile', () => CodeRunner.runActiveEditor()));
+  context.subscriptions.push(vscode.commands.registerCommand('konvert.runWithOptions', () => CodeRunner.runWithOptions()));
 
   // 3. Reactive Continuous Twin-Buffer & Multi-File Project Manager
   const twinBufferManager = new TwinBufferManager();
@@ -986,6 +1006,8 @@ export function activate(context: vscode.ExtensionContext) {
           await vscode.env.clipboard.writeText(message.text);
           vscode.window.setStatusBarMessage('✓ Konvert: Code copied to clipboard', 2500);
         }
+      } else if (message.command === 'runCode') {
+        await CodeRunner.runActiveEditor();
       }
     });
   };
@@ -1648,6 +1670,9 @@ function getWebviewContent(logoSrc?: string): string {
     </div>
 
     <div class="tab-actions">
+      <button id="runCodeBtn" class="action-icon-btn" style="color: #4ec9b0; border-color: rgba(78, 201, 176, 0.4); font-weight: 600;" title="Run Code in Terminal (Ctrl+Alt+R / F5)">
+        <span>▶</span> Run Code
+      </button>
       <label class="live-sync-pill" title="Continuously types directly into active VS Code editor in real time">
         <input type="checkbox" id="liveSyncToggle" checked style="accent-color: var(--accent); cursor: pointer;" />
         <span style="font-size: 11px; font-weight: 600; color: var(--accent); cursor: pointer;">⚡ Live Sync to Editor</span>
@@ -1719,6 +1744,9 @@ function getWebviewContent(logoSrc?: string): string {
     </div>
 
     <div class="footer-actions">
+      <button id="runCodeFooterBtn" class="btn-primary" title="Compile & Execute in Terminal (Ctrl+Alt+R / F5)">
+        <span>▶</span> Run Code
+      </button>
       <button id="copyBtn" class="btn-secondary" title="Copy Emitted Target Code">
         <span id="copyIcon">📋</span> Copy Code
       </button>
@@ -1741,12 +1769,26 @@ function getWebviewContent(logoSrc?: string): string {
     const targetCharCount = document.getElementById('targetCharCount');
     const langTabs = document.getElementById('langTabs');
     const normalizeBtn = document.getElementById('normalizeBtn');
+    const runCodeBtn = document.getElementById('runCodeBtn');
+    const runCodeFooterBtn = document.getElementById('runCodeFooterBtn');
     const copyBtn = document.getElementById('copyBtn');
     const clearBtn = document.getElementById('clearBtn');
     const liveSyncToggle = document.getElementById('liveSyncToggle');
     const togglePeekBtn = document.getElementById('togglePeekBtn');
     const peekDrawer = document.getElementById('peekDrawer');
     const peekBtnText = document.getElementById('peekBtnText');
+
+    if (runCodeBtn) {
+      runCodeBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: 'runCode' });
+      });
+    }
+
+    if (runCodeFooterBtn) {
+      runCodeFooterBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: 'runCode' });
+      });
+    }
 
     let currentLang = 'python';
     let liveSyncTimer = null;
