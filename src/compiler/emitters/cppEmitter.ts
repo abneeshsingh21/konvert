@@ -1,13 +1,20 @@
 import * as ast from '../ast.js';
 
+export interface CppEmitterOptions {
+  isSnippet?: boolean;
+  useNamespaceStd?: boolean;
+}
+
 export class CppEmitter {
   private indentLevel: number = 0;
+  private options?: CppEmitterOptions;
 
   private indent(): string {
     return '    '.repeat(this.indentLevel);
   }
 
-  public emit(program: ast.ProgramNode, options?: { isSnippet?: boolean }): string {
+  public emit(program: ast.ProgramNode, options?: CppEmitterOptions): string {
+    this.options = options;
     let code = '';
 
     if (!options?.isSnippet) {
@@ -18,6 +25,9 @@ export class CppEmitter {
       }
       if (sortedHeaders.length > 0) {
         code += '\n';
+      }
+      if (options?.useNamespaceStd) {
+        code += 'using namespace std;\n\n';
       }
     }
 
@@ -120,6 +130,8 @@ export class CppEmitter {
         return this.visitFilter(node);
       case 'Sort':
         return this.visitSort(node);
+      case 'RawCode':
+        return this.visitRawCode(node as ast.RawCodeNode);
       default:
         if ('operator' in node || 'name' in node || 'valueType' in node) {
           return `${this.indent()}${this.visitExpression(node as ast.ExpressionNode)};`;
@@ -289,7 +301,16 @@ export class CppEmitter {
   }
 
   private visitPrint(node: ast.PrintNode): string {
-    return `${this.indent()}std::cout << ${this.visitExpression(node.value)} << std::endl;`;
+    const prefix = this.options?.useNamespaceStd ? '' : 'std::';
+    return `${this.indent()}${prefix}cout << ${this.visitExpression(node.value)} << ${prefix}endl;`;
+  }
+
+  private visitRawCode(node: ast.RawCodeNode): string {
+    if (node.language === 'CPP' || node.language === 'C') {
+      const lines = node.code.split('\n');
+      return lines.map((l: string) => this.indent() + l).join('\n');
+    }
+    return `${this.indent()}// RAW ${node.language}: ${node.code.replace(/\n/g, ' ')}`;
   }
 
   private visitAppend(node: ast.AppendNode): string {
@@ -389,6 +410,7 @@ export class CppEmitter {
   }
 
   private mapType(t: ast.TypeNode): string {
+    const prefix = this.options?.useNamespaceStd ? '' : 'std::';
     const typeName = t.name || t.kind;
     switch (typeName) {
       case 'Int':
@@ -396,23 +418,25 @@ export class CppEmitter {
       case 'Float':
         return 'double';
       case 'String':
-        return 'std::string';
+        return `${prefix}string`;
       case 'Bool':
         return 'bool';
       case 'Void':
         return 'void';
+      case 'Char':
+        return 'char';
       case 'List': {
         const inner = t.typeArgs && t.typeArgs[0] ? this.mapType(t.typeArgs[0]) : 'auto';
-        return `std::vector<${inner}>`;
+        return `${prefix}vector<${inner}>`;
       }
       case 'Set': {
         const inner = t.typeArgs && t.typeArgs[0] ? this.mapType(t.typeArgs[0]) : 'auto';
-        return `std::set<${inner}>`;
+        return `${prefix}set<${inner}>`;
       }
       case 'Map': {
-        const keyType = t.typeArgs && t.typeArgs[0] ? this.mapType(t.typeArgs[0]) : 'std::string';
+        const keyType = t.typeArgs && t.typeArgs[0] ? this.mapType(t.typeArgs[0]) : `${prefix}string`;
         const valType = t.typeArgs && t.typeArgs[1] ? this.mapType(t.typeArgs[1]) : 'auto';
-        return `std::map<${keyType}, ${valType}>`;
+        return `${prefix}map<${keyType}, ${valType}>`;
       }
       default:
         return typeName || 'auto';
@@ -420,7 +444,7 @@ export class CppEmitter {
   }
 }
 
-export function emitCpp(program: ast.ProgramNode, options?: { isSnippet?: boolean }): string {
+export function emitCpp(program: ast.ProgramNode, options?: CppEmitterOptions): string {
   const emitter = new CppEmitter();
   return emitter.emit(program, options);
 }

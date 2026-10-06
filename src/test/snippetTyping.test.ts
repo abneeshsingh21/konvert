@@ -140,4 +140,69 @@ END FUNCTION`;
     expect(committedCount).toBe(2);
     expect(editorBuffer).toBe('count: int = 0\ncount = (count + 1)\n');
   });
+
+  it('compiles production-grade type-first multi-variable declarations across all languages', () => {
+    // int a,b
+    const cppRes = compileSnippetForLang('int a,b', 'cpp');
+    expect(cppRes.errors).toHaveLength(0);
+    expect(cppRes.code.trim()).toBe('int a;\nint b;');
+
+    const javaRes = compileSnippetForLang('int a,b', 'java');
+    expect(javaRes.errors).toHaveLength(0);
+    expect(javaRes.code.trim()).toBe('int a;\nint b;');
+
+    const pyRes = compileSnippetForLang('int a,b', 'python');
+    expect(pyRes.errors).toHaveLength(0);
+    expect(pyRes.code.trim()).toContain('a: int');
+    expect(pyRes.code.trim()).toContain('b: int');
+
+    // int a = 10, b = 20
+    const cppInit = compileSnippetForLang('int a = 10, b = 20', 'cpp');
+    expect(cppInit.errors).toHaveLength(0);
+    expect(cppInit.code.trim()).toBe('int a = 10;\nint b = 20;');
+
+    const javaInit = compileSnippetForLang('int a = 10, b = 20', 'java');
+    expect(javaInit.errors).toHaveLength(0);
+    expect(javaInit.code.trim()).toBe('int a = 10;\nint b = 20;');
+  });
+
+  it('compiles multi-variable prints cleanly without literal string quotation', () => {
+    const cppRes = compileSnippetForLang('print a, b', 'cpp');
+    expect(cppRes.errors).toHaveLength(0);
+    expect(cppRes.code.trim()).toBe('std::cout << a << std::endl;\nstd::cout << b << std::endl;');
+
+    const cppStdRes = compileSnippetForLang('print a, b', 'cpp', { useNamespaceStd: true });
+    expect(cppStdRes.errors).toHaveLength(0);
+    expect(cppStdRes.code.trim()).toBe('cout << a << endl;\ncout << b << endl;');
+
+    const javaRes = compileSnippetForLang('print a, b', 'java');
+    expect(javaRes.errors).toHaveLength(0);
+    expect(javaRes.code.trim()).toBe('System.out.println(a);\nSystem.out.println(b);');
+
+    const pyRes = compileSnippetForLang('print a, b', 'python');
+    expect(pyRes.errors).toHaveLength(0);
+    expect(pyRes.code.trim()).toBe('print(a)\nprint(b)');
+  });
+
+  it('compiles block headers in real time without expecting END error', () => {
+    // If statement header
+    expect(compileSnippetForLang('if (a > b) {', 'cpp').code.trim()).toBe('if (a > b) {');
+    expect(compileSnippetForLang('if (a > b) {', 'java').code.trim()).toBe('if (a > b) {');
+    expect(compileSnippetForLang('if (a > b) {', 'python').code.trim()).toBe('if a > b:');
+
+    // While loop header
+    expect(compileSnippetForLang('while (n > 0)', 'cpp').code.trim()).toBe('while (n > 0) {');
+    expect(compileSnippetForLang('while (n > 0)', 'java').code.trim()).toBe('while (n > 0) {');
+    expect(compileSnippetForLang('while (n > 0)', 'python').code.trim()).toBe('while n > 0:');
+
+    // For loop header
+    expect(compileSnippetForLang('for (int i = 0; i < n; i++)', 'cpp').code.trim()).toBe('for (int i = 0; i < n; i++) {');
+    expect(compileSnippetForLang('for (int i = 0; i < n; i++)', 'java').code.trim()).toBe('for (int i = 0; i < n; i++) {');
+    expect(compileSnippetForLang('for (int i = 0; i < n; i++)', 'python').code.trim()).toBe('for i in range(n):');
+
+    // Closer
+    expect(compileSnippetForLang('}', 'cpp').code.trim()).toBe('}');
+    expect(compileSnippetForLang('}', 'java').code.trim()).toBe('}');
+    expect(compileSnippetForLang('}', 'python').code.trim()).toBe('# end');
+  });
 });

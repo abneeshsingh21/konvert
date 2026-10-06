@@ -46,6 +46,10 @@ export class ModelNormalizer {
     return ModelDownloader.isModelInstalled(dir);
   }
 
+  public get ready(): boolean {
+    return this.isReady;
+  }
+
   public start(): Promise<boolean> {
     if (this.isReady && this.process) {
       return Promise.resolve(true);

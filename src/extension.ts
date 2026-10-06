@@ -300,8 +300,10 @@ export function activate(context: vscode.ExtensionContext) {
       const updateButtonsAndPrompts = (customPrompt?: string) => {
         const curLine = getActualLineNum();
         const docName = (editor.document && editor.document.fileName) ? path.basename(editor.document.fileName) : 'editor';
+        const aiAvailable = ModelNormalizer.getInstance(context.extensionPath).isModelAvailable();
+        const aiIndicator = aiAvailable ? ' • 🧠 AI Online' : '';
 
-        inputBox.title = `⚡ Konvert [Line ${curLine}] — Realtime English to Code (${targetLang.toUpperCase()})`;
+        inputBox.title = `⚡ Konvert [Line ${curLine}] — Realtime English to Code (${targetLang.toUpperCase()}${aiIndicator})`;
 
         if (committedHistory.length > 0) {
           const prev = committedHistory[committedHistory.length - 1];
@@ -383,11 +385,82 @@ export function activate(context: vscode.ExtensionContext) {
         updateButtonsAndPrompts(`🗑️ Deleted Line ${last.lineIndex + 1}. Now on Line ${startPos.line + 1}.`);
       };
 
+      let aiTimer: NodeJS.Timeout | null = null;
+      let aiQuerySeq = 0;
+
+      const clearAiDebounce = () => {
+        if (aiTimer) {
+          clearTimeout(aiTimer);
+          aiTimer = null;
+        }
+      };
+
+      const scheduleAiFallback = (queryText: string) => {
+        clearAiDebounce();
+        const modelNorm = ModelNormalizer.getInstance(context.extensionPath);
+        if (!modelNorm.isModelAvailable() || queryText.length < 3) {
+          return;
+        }
+
+        const seq = ++aiQuerySeq;
+        aiTimer = setTimeout(async () => {
+          if (seq !== aiQuerySeq || !inputBox.value.trim() || inputBox.value.trim() !== queryText) {
+            return;
+          }
+          try {
+            inputBox.prompt = `🧠 [AI Processing] Normalizing "${queryText}"...`;
+            const cnl = await modelNorm.normalize(queryText, 2500);
+            if (seq !== aiQuerySeq || !cnl || !inputBox.value.trim()) return;
+
+            const docText = editor.document.getText();
+            const hasUsingNamespaceStd = docText.includes('using namespace std;');
+            const aiRes = compileSnippetForLang(cnl, targetLang, { useNamespaceStd: hasUsingNamespaceStd });
+            if (aiRes.errors.length === 0 && aiRes.code.trim().length > 0) {
+              let codeToWrite = aiRes.code.trimEnd();
+              let currentIndent = '';
+              if (editor.document.lineCount > 0) {
+                const currentLineNum = Math.max(0, Math.min(appliedRange.start.line, editor.document.lineCount - 1));
+                const lineText = editor.document.lineAt(currentLineNum).text;
+                const indentMatch = lineText.match(/^(\s*)/);
+                currentIndent = indentMatch ? indentMatch[1] : '';
+              }
+
+              if (currentIndent && codeToWrite.includes('\n')) {
+                codeToWrite = codeToWrite
+                  .split('\n')
+                  .map((line, idx) => (idx > 0 && line.trim() ? currentIndent + line : line))
+                  .join('\n');
+              }
+
+              await editor.edit((edit) => {
+                edit.replace(appliedRange, codeToWrite);
+              }, { undoStopBefore: false, undoStopAfter: false });
+
+              const lines = codeToWrite.split('\n');
+              const endLine = appliedRange.start.line + lines.length - 1;
+              const endChar = (lines.length === 1 ? appliedRange.start.character : 0) + lines[lines.length - 1].length;
+              appliedRange = new vscode.Range(appliedRange.start, new vscode.Position(endLine, endChar));
+              hasAppliedAnyCode = true;
+
+              editor.selection = new vscode.Selection(appliedRange.end, appliedRange.end);
+              editor.revealRange(appliedRange, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+
+              const compactPreview = codeToWrite.replace(/\r?\n\s*/g, ' ↵ ');
+              inputBox.prompt = `⚡ [🧠 AI Online] Live on Line ${appliedRange.start.line + 1}: ${compactPreview}`;
+              inputBox.validationMessage = undefined;
+            }
+          } catch {
+            // Silently fall through to standard typing prompt
+          }
+        }, 350);
+      };
+
       const applyLiveEdit = async (rawInput: string) => {
         const text = rawInput.trim();
 
         // If user erased everything in HUD, remove the generated code for the CURRENT line from editor immediately!
         if (!text) {
+          clearAiDebounce();
           if (hasAppliedAnyCode) {
             await editor.edit((edit) => {
               edit.replace(appliedRange, '');
@@ -401,10 +474,13 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const t0 = performance.now();
-        const res = compileSnippetForLang(text, targetLang);
+        const docText = editor.document.getText();
+        const hasUsingNamespaceStd = docText.includes('using namespace std;');
+        const res = compileSnippetForLang(text, targetLang, { useNamespaceStd: hasUsingNamespaceStd });
         const elapsedMs = (performance.now() - t0).toFixed(1);
 
         if (res.errors.length === 0 && res.code.trim().length > 0) {
+          clearAiDebounce();
           let codeToWrite = res.code.trimEnd();
 
           // Match current line indentation level safely
@@ -443,6 +519,7 @@ export function activate(context: vscode.ExtensionContext) {
           inputBox.prompt = `⚡ [${elapsedMs}ms] Live on Line ${appliedRange.start.line + 1}: ${compactPreview}`;
           inputBox.validationMessage = undefined;
         } else {
+          scheduleAiFallback(text);
           const hint = res.errors[0]?.message || 'Type complete intent...';
           inputBox.prompt = `⏳ Line ${appliedRange.start.line + 1}: typing intent... (${hint})`;
         }
@@ -599,6 +676,89 @@ export function activate(context: vscode.ExtensionContext) {
 
           // HUD STAYS OPEN! No inputBox.hide() called!
         } else {
+          // Input text hasn't compiled deterministically yet
+          clearAiDebounce();
+          const modelNorm = ModelNormalizer.getInstance(context.extensionPath);
+          if (modelNorm.isModelAvailable() && rawVal.length >= 3) {
+            inputBox.prompt = `🧠 [AI Processing] Normalizing "${rawVal}"...`;
+            try {
+              const cnl = await modelNorm.normalize(rawVal, 3000);
+              if (cnl) {
+                const docText = editor.document.getText();
+                const hasUsingNamespaceStd = docText.includes('using namespace std;');
+                const aiRes = compileSnippetForLang(cnl, targetLang, { useNamespaceStd: hasUsingNamespaceStd });
+                if (aiRes.errors.length === 0 && aiRes.code.trim().length > 0) {
+                  let codeToWrite = aiRes.code.trimEnd();
+                  let currentIndent = '';
+                  if (editor.document.lineCount > 0) {
+                    const currentLineNum = Math.max(0, Math.min(appliedRange.start.line, editor.document.lineCount - 1));
+                    const lineText = editor.document.lineAt(currentLineNum).text;
+                    const indentMatch = lineText.match(/^(\s*)/);
+                    currentIndent = indentMatch ? indentMatch[1] : '';
+                  }
+
+                  if (currentIndent && codeToWrite.includes('\n')) {
+                    codeToWrite = codeToWrite
+                      .split('\n')
+                      .map((line, idx) => (idx > 0 && line.trim() ? currentIndent + line : line))
+                      .join('\n');
+                  }
+
+                  await editor.edit((edit) => {
+                    edit.replace(appliedRange, codeToWrite);
+                  }, { undoStopBefore: false, undoStopAfter: false });
+
+                  const lines = codeToWrite.split('\n');
+                  const endLine = appliedRange.start.line + lines.length - 1;
+                  const endChar = (lines.length === 1 ? appliedRange.start.character : 0) + lines[lines.length - 1].length;
+                  appliedRange = new vscode.Range(appliedRange.start, new vscode.Position(endLine, endChar));
+                  hasAppliedAnyCode = true;
+
+                  // Advance line and commit
+                  let nextIndent = currentIndent;
+                  if (codeToWrite.trimEnd().endsWith(':') || codeToWrite.trimEnd().endsWith('{')) {
+                    nextIndent += '    ';
+                  }
+
+                  const currentCodeRange = appliedRange;
+                  const currentLineIndex = appliedRange.start.line;
+                  const newlineText = '\n' + nextIndent;
+
+                  await editor.edit((edit) => {
+                    edit.insert(appliedRange.end, newlineText);
+                  }, { undoStopBefore: true, undoStopAfter: false });
+
+                  const nextLineNum = currentCodeRange.end.line + 1;
+                  const nextCol = nextIndent.length;
+                  const nextPos = new vscode.Position(nextLineNum, nextCol);
+                  const newlineInsertedRange = new vscode.Range(currentCodeRange.end, nextPos);
+
+                  committedHistory.push({
+                    english: rawVal,
+                    code: editor.document.getText(currentCodeRange),
+                    codeRange: currentCodeRange,
+                    newlineRange: newlineInsertedRange,
+                    lineIndex: currentLineIndex,
+                  });
+
+                  contextBuilder.addStatement(rawVal);
+                  editor.selection = new vscode.Selection(nextPos, nextPos);
+                  editor.revealRange(new vscode.Range(nextPos, nextPos));
+                  startPos = nextPos;
+                  appliedRange = new vscode.Range(nextPos, nextPos);
+                  hasAppliedAnyCode = false;
+
+                  inputBox.value = '';
+                  updateButtonsAndPrompts();
+                  inputBox.validationMessage = undefined;
+                  return;
+                }
+              }
+            } catch {
+              // Fall through to validation error
+            }
+          }
+
           // Input text hasn't compiled yet (syntax error or incomplete)
           const res = compileSnippetForLang(rawVal, targetLang);
           if (res.errors.length > 0) {
@@ -608,6 +768,7 @@ export function activate(context: vscode.ExtensionContext) {
       });
 
       inputBox.onDidHide(async () => {
+        clearAiDebounce();
         selectionListener.dispose();
         if (!isAccepted && hasAppliedAnyCode) {
           // User cancelled via Escape on an uncommitted line: roll back only that line's preview

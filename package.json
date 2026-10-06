@@ -1,7 +1,7 @@
 {
   "name": "konvert",
   "displayName": "Konvert — English to Code Compiler",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Deterministic English-to-Code compiler — Write English, Ship Code. 0% Hallucinations, <2ms Latency, 100% Offline.",
   "icon": "icon.png",
   "type": "module",
@@ -124,7 +124,7 @@
     ]
   },
   "scripts": {
-    "build": "tsc && esbuild src/extension.ts --bundle --outfile=dist/extension.cjs --external:vscode --format=cjs --platform=node",
+    "build": "tsc && esbuild src/extension.ts --bundle --outfile=dist/extension.cjs --external:vscode --format=cjs --platform=node && node -e \"fs.copyFileSync('dist/extension.cjs', 'dist/extension.cjs.js')\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "benchmark": "vitest bench",
